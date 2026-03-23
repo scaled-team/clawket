@@ -66,6 +66,7 @@ For iOS development on macOS:
 
 ```bash
 npm install
+npm run mobile:sync:native
 npm run mobile:dev:ios
 ```
 
@@ -75,6 +76,7 @@ For Android development:
 
 ```bash
 npm install
+npm run mobile:sync:native
 npm run mobile:dev:android
 ```
 

@@ -1305,16 +1305,16 @@ export class GatewayClient {
         this.pairingPending = true;
         this.setState('pairing_pending');
         this.emit('pairingRequired', { requestId });
-        // Keep the WebSocket open to receive device.pair.resolved event.
-        // Start a timeout — if no approval within PAIRING_WAIT_TIMEOUT_MS,
-        // close the connection and block reconnect so the user can take action.
+        // Keep the WebSocket open to receive device.pair.resolved.
+        // If approval never arrives, stop reconnecting automatically so the
+        // user can approve the device on the OpenClaw host and retry.
         this.clearPairingTimer();
         this.pairingTimer = setTimeout(() => {
           if (this.pairingPending) {
             this.blockReconnect({
               code: 'pairing_required',
               message: 'Pairing approval timed out. Please retry.',
-              hint: 'Approve pairing in Bridge Dashboard or Gateway host, then reconnect.',
+              hint: 'Approve pairing on the OpenClaw host, then reconnect.',
             });
             this.pairingPending = false;
             this.ws?.close();

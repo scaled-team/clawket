@@ -66,6 +66,7 @@ Clawket 支持两种连接方式：
 
 ```bash
 npm install
+npm run mobile:sync:native
 npm run mobile:dev:ios
 ```
 
@@ -73,6 +74,7 @@ npm run mobile:dev:ios
 
 ```bash
 npm install
+npm run mobile:sync:native
 npm run mobile:dev:android
 ```
 

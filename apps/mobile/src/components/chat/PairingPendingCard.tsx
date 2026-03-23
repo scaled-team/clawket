@@ -40,7 +40,7 @@ export function PairingPendingCard({ approveCommand, copied, onCopy, connectionM
             </View>
 
             <TouchableOpacity style={styles.copyBtn} onPress={onCopy} activeOpacity={0.7}>
-              <Text style={styles.copyBtnText}>{copied ? t('common:Copied!') : t('Copy Command')}</Text>
+              <Text style={styles.copyBtnText}>{copied ? t('Copied!', { ns: 'common' }) : t('Copy Command')}</Text>
             </TouchableOpacity>
           </>
         )}
@@ -54,7 +54,7 @@ export function PairingPendingCard({ approveCommand, copied, onCopy, connectionM
 
         {onRetry && (
           <TouchableOpacity style={styles.retryBtn} onPress={onRetry} activeOpacity={0.7}>
-            <Text style={styles.retryBtnText}>{t('common:Retry Now')}</Text>
+            <Text style={styles.retryBtnText}>{t('Retry Now', { ns: 'common' })}</Text>
           </TouchableOpacity>
         )}
       </View>
