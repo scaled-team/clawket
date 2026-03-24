@@ -1,11 +1,16 @@
+<p align="center">
+  <img src="./assets/clawket-hero.png" alt="Clawket" />
+</p>
+
 # Clawket
+
+[![npm version](https://img.shields.io/npm/v/@p697/clawket)](https://www.npmjs.com/package/@p697/clawket)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[Follow on X](https://x.com/cavano697)
 
 [English README](./README.md)
 
 Clawket 是一个开源的移动端应用，用来随时随地管理你的 [OpenClaw](https://github.com/openclaw/openclaw) AI Agent。支持 [iOS](https://apps.apple.com/app/id6759597015) 和 Android。
-
-<!-- TODO: 添加 App Store / Google Play 徽章 -->
-<!-- TODO: 添加截图 -->
 
 ## 核心特性
 
