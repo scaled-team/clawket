@@ -419,7 +419,7 @@ export function OpenClawConfigScreen(): React.JSX.Element {
             </>
           ) : null}
         </ScrollView>
-        {doctorResult && !doctorResult.ok && !runningDoctor && !fixResult ? (
+        {doctorResult && !runningDoctor && !fixResult ? (
           <View style={styles.fixButtonContainer}>
             <Pressable
               style={({ pressed }) => [
