@@ -263,6 +263,299 @@ export function parseRelayBootstrapError(control: RelayControlFrame): { requestI
   };
 }
 
+export type RelayDoctorCheckResult = {
+  name: string;
+  status: 'pass' | 'fail' | 'warn' | 'skip' | string;
+  message?: string;
+};
+
+export type RelayDoctorResult = {
+  ok: boolean;
+  checks: RelayDoctorCheckResult[];
+  summary: string;
+  raw?: string;
+};
+
+export type PendingRelayDoctorRequest = {
+  requestId: string;
+  startedAt: number;
+  timeout: ReturnType<typeof setTimeout>;
+  resolve: (result: RelayDoctorResult) => void;
+  reject: (error: Error) => void;
+};
+
+export class RelayDoctorRequestError extends Error {
+  public readonly code: 'relay_doctor_timeout' | 'relay_doctor_failed' | 'relay_doctor_fix_timeout' | 'relay_doctor_fix_failed';
+  public readonly detailCode?: string;
+
+  constructor(
+    code: 'relay_doctor_timeout' | 'relay_doctor_failed' | 'relay_doctor_fix_timeout' | 'relay_doctor_fix_failed',
+    message: string,
+    detailCode?: string,
+  ) {
+    super(message);
+    this.name = 'RelayDoctorRequestError';
+    this.code = code;
+    this.detailCode = detailCode;
+  }
+}
+
+export function buildRelayDoctorRequestFrame(params: {
+  requestId: string;
+}): string {
+  return `${RELAY_CONTROL_PREFIX}${JSON.stringify({
+    type: 'control',
+    event: 'doctor.request',
+    requestId: params.requestId,
+  })}`;
+}
+
+export function parseRelayDoctorResult(control: RelayControlFrame): { requestId?: string; result: RelayDoctorResult } | null {
+  if (control.event !== 'doctor.result') return null;
+  const payload = unwrapRelayControlPayload(control.payload);
+  const requestId = trimToUndefined(payload.requestId);
+  const checks = Array.isArray(payload.checks)
+    ? (payload.checks as Record<string, unknown>[])
+      .filter((c): c is Record<string, unknown> => typeof c === 'object' && c != null)
+      .map((c) => ({
+        name: typeof c.name === 'string' ? c.name : 'unknown',
+        status: (typeof c.status === 'string' ? c.status : 'unknown') as RelayDoctorCheckResult['status'],
+        message: typeof c.message === 'string' ? c.message : undefined,
+      }))
+    : [];
+  return {
+    requestId,
+    result: {
+      ok: payload.ok === true,
+      checks,
+      summary: typeof payload.summary === 'string' ? payload.summary : '',
+      raw: typeof payload.raw === 'string' ? payload.raw : undefined,
+    },
+  };
+}
+
+export type RelayPermissionsStatus =
+  | 'available'
+  | 'needs_approval'
+  | 'restricted'
+  | 'disabled'
+  | 'configuration_needed';
+
+export type RelayPermissionsSummary = {
+  status: RelayPermissionsStatus;
+  summary: string;
+  reasons: string[];
+};
+
+export type RelayPermissionsResult = {
+  configPath: string;
+  approvalsPath: string;
+  web: RelayPermissionsSummary & {
+    searchEnabled: boolean;
+    searchProvider: string;
+    searchConfigured: boolean;
+    fetchEnabled: boolean;
+    firecrawlConfigured: boolean;
+  };
+  exec: RelayPermissionsSummary & {
+    currentAgentId: string;
+    currentAgentName: string;
+    toolProfile: 'minimal' | 'coding' | 'messaging' | 'full' | 'unset';
+    execToolAvailable: boolean;
+    hostApprovalsApply: boolean;
+    implicitSandboxFallback: boolean;
+    configuredHost: 'sandbox' | 'gateway' | 'node';
+    effectiveHost: 'sandbox' | 'gateway' | 'node';
+    sandboxMode: 'off' | 'non-main' | 'all';
+    configSecurity: 'deny' | 'allowlist' | 'full';
+    configAsk: 'off' | 'on-miss' | 'always';
+    approvalsExists: boolean;
+    approvalsSecurity: 'deny' | 'allowlist' | 'full';
+    approvalsAsk: 'off' | 'on-miss' | 'always';
+    effectiveSecurity: 'deny' | 'allowlist' | 'full';
+    effectiveAsk: 'off' | 'on-miss' | 'always';
+    allowlistCount: number;
+    toolPolicyDenied: boolean;
+    safeBins: string[];
+    safeBinTrustedDirs: string[];
+    trustedDirWarnings: string[];
+  };
+  codeExecution: RelayPermissionsSummary & {
+    inheritsFromExec: true;
+  };
+};
+
+export type PendingRelayPermissionsRequest = {
+  requestId: string;
+  startedAt: number;
+  timeout: ReturnType<typeof setTimeout>;
+  resolve: (result: RelayPermissionsResult) => void;
+  reject: (error: Error) => void;
+};
+
+export function buildRelayPermissionsRequestFrame(params: {
+  requestId: string;
+}): string {
+  return `${RELAY_CONTROL_PREFIX}${JSON.stringify({
+    type: 'control',
+    event: 'permissions.request',
+    requestId: params.requestId,
+  })}`;
+}
+
+function parseRelayPermissionsSummary(
+  value: unknown,
+): RelayPermissionsSummary {
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    status: (typeof record.status === 'string' ? record.status : 'disabled') as RelayPermissionsStatus,
+    summary: typeof record.summary === 'string' ? record.summary : '',
+    reasons: Array.isArray(record.reasons)
+      ? record.reasons.filter((reason): reason is string => typeof reason === 'string')
+      : [],
+  };
+}
+
+export function parseRelayPermissionsResult(control: RelayControlFrame): { requestId?: string; result: RelayPermissionsResult } | null {
+  if (control.event !== 'permissions.result') return null;
+  const payload = unwrapRelayControlPayload(control.payload);
+  const requestId = trimToUndefined(payload.requestId);
+  const web = payload.web && typeof payload.web === 'object' ? payload.web as Record<string, unknown> : {};
+  const exec = payload.exec && typeof payload.exec === 'object' ? payload.exec as Record<string, unknown> : {};
+  const codeExecution = payload.codeExecution && typeof payload.codeExecution === 'object'
+    ? payload.codeExecution as Record<string, unknown>
+    : {};
+  const legacyHost = (trimToUndefined(exec.host) ?? 'sandbox') as RelayPermissionsResult['exec']['effectiveHost'];
+  const configuredHost = (trimToUndefined(exec.configuredHost) ?? legacyHost) as RelayPermissionsResult['exec']['configuredHost'];
+  const effectiveHost = (trimToUndefined(exec.effectiveHost) ?? legacyHost) as RelayPermissionsResult['exec']['effectiveHost'];
+  return {
+    requestId,
+    result: {
+      configPath: trimToUndefined(payload.configPath) ?? '',
+      approvalsPath: trimToUndefined(payload.approvalsPath) ?? '',
+      web: {
+        ...parseRelayPermissionsSummary(web),
+        searchEnabled: web.searchEnabled === true,
+        searchProvider: trimToUndefined(web.searchProvider) ?? 'auto',
+        searchConfigured: web.searchConfigured === true,
+        fetchEnabled: web.fetchEnabled !== false,
+        firecrawlConfigured: web.firecrawlConfigured === true,
+      },
+      exec: {
+        ...parseRelayPermissionsSummary(exec),
+        currentAgentId: trimToUndefined(exec.currentAgentId) ?? 'main',
+        currentAgentName: trimToUndefined(exec.currentAgentName) ?? 'main',
+        toolProfile: (trimToUndefined(exec.toolProfile) ?? 'unset') as RelayPermissionsResult['exec']['toolProfile'],
+        execToolAvailable: exec.execToolAvailable !== false,
+        hostApprovalsApply: exec.hostApprovalsApply === true,
+        implicitSandboxFallback: exec.implicitSandboxFallback === true,
+        configuredHost,
+        effectiveHost,
+        sandboxMode: (trimToUndefined(exec.sandboxMode) ?? 'off') as RelayPermissionsResult['exec']['sandboxMode'],
+        configSecurity: (trimToUndefined(exec.configSecurity) ?? 'deny') as RelayPermissionsResult['exec']['configSecurity'],
+        configAsk: (trimToUndefined(exec.configAsk) ?? 'on-miss') as RelayPermissionsResult['exec']['configAsk'],
+        approvalsExists: exec.approvalsExists === true,
+        approvalsSecurity: (trimToUndefined(exec.approvalsSecurity) ?? 'deny') as RelayPermissionsResult['exec']['approvalsSecurity'],
+        approvalsAsk: (trimToUndefined(exec.approvalsAsk) ?? 'on-miss') as RelayPermissionsResult['exec']['approvalsAsk'],
+        effectiveSecurity: (trimToUndefined(exec.effectiveSecurity) ?? 'deny') as RelayPermissionsResult['exec']['effectiveSecurity'],
+        effectiveAsk: (trimToUndefined(exec.effectiveAsk) ?? 'on-miss') as RelayPermissionsResult['exec']['effectiveAsk'],
+        allowlistCount: typeof exec.allowlistCount === 'number' ? exec.allowlistCount : 0,
+        toolPolicyDenied: exec.toolPolicyDenied === true,
+        safeBins: Array.isArray(exec.safeBins)
+          ? exec.safeBins.filter((entry): entry is string => typeof entry === 'string')
+          : [],
+        safeBinTrustedDirs: Array.isArray(exec.safeBinTrustedDirs)
+          ? exec.safeBinTrustedDirs.filter((entry): entry is string => typeof entry === 'string')
+          : [],
+        trustedDirWarnings: Array.isArray(exec.trustedDirWarnings)
+          ? exec.trustedDirWarnings.filter((entry): entry is string => typeof entry === 'string')
+          : [],
+      },
+      codeExecution: {
+        ...parseRelayPermissionsSummary(codeExecution),
+        inheritsFromExec: true,
+      },
+    },
+  };
+}
+
+export function parseRelayPermissionsError(control: RelayControlFrame): { requestId?: string; error: RelayDoctorRequestError } | null {
+  if (control.event !== 'permissions.error') return null;
+  const payload = unwrapRelayControlPayload(control.payload);
+  const requestId = trimToUndefined(payload.requestId);
+  const detailCode = trimToUndefined(payload.code);
+  const rawMessage = trimToUndefined(payload.message) ?? 'Permissions request failed.';
+  const message = detailCode ? `[${detailCode}] ${rawMessage}` : rawMessage;
+  return {
+    requestId,
+    error: new RelayDoctorRequestError('relay_doctor_failed', message, detailCode),
+  };
+}
+
+export function parseRelayDoctorError(control: RelayControlFrame): { requestId?: string; error: RelayDoctorRequestError } | null {
+  if (control.event !== 'doctor.error') return null;
+  const payload = unwrapRelayControlPayload(control.payload);
+  const requestId = trimToUndefined(payload.requestId);
+  const detailCode = trimToUndefined(payload.code);
+  const rawMessage = trimToUndefined(payload.message) ?? 'Doctor command failed.';
+  const message = detailCode ? `[${detailCode}] ${rawMessage}` : rawMessage;
+  return {
+    requestId,
+    error: new RelayDoctorRequestError('relay_doctor_failed', message, detailCode),
+  };
+}
+
+export type RelayDoctorFixResult = {
+  ok: boolean;
+  summary: string;
+  raw?: string;
+};
+
+export type PendingRelayDoctorFixRequest = {
+  requestId: string;
+  startedAt: number;
+  timeout: ReturnType<typeof setTimeout>;
+  resolve: (result: RelayDoctorFixResult) => void;
+  reject: (error: Error) => void;
+};
+
+export function buildRelayDoctorFixRequestFrame(params: {
+  requestId: string;
+}): string {
+  return `${RELAY_CONTROL_PREFIX}${JSON.stringify({
+    type: 'control',
+    event: 'doctor-fix.request',
+    requestId: params.requestId,
+  })}`;
+}
+
+export function parseRelayDoctorFixResult(control: RelayControlFrame): { requestId?: string; result: RelayDoctorFixResult } | null {
+  if (control.event !== 'doctor-fix.result') return null;
+  const payload = unwrapRelayControlPayload(control.payload);
+  const requestId = trimToUndefined(payload.requestId);
+  return {
+    requestId,
+    result: {
+      ok: payload.ok === true,
+      summary: typeof payload.summary === 'string' ? payload.summary : '',
+      raw: typeof payload.raw === 'string' ? payload.raw : undefined,
+    },
+  };
+}
+
+export function parseRelayDoctorFixError(control: RelayControlFrame): { requestId?: string; error: RelayDoctorRequestError } | null {
+  if (control.event !== 'doctor-fix.error') return null;
+  const payload = unwrapRelayControlPayload(control.payload);
+  const requestId = trimToUndefined(payload.requestId);
+  const detailCode = trimToUndefined(payload.code);
+  const rawMessage = trimToUndefined(payload.message) ?? 'Doctor fix command failed.';
+  const message = detailCode ? `[${detailCode}] ${rawMessage}` : rawMessage;
+  return {
+    requestId,
+    error: new RelayDoctorRequestError('relay_doctor_fix_failed', message, detailCode),
+  };
+}
+
 export function buildRelayClientWsUrl(
   relayUrl: string,
   relayGatewayId: string,

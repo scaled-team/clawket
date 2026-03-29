@@ -4,7 +4,10 @@ import type { PairingConfig } from '@clawket/bridge-core';
 import WebSocket, { type RawData } from 'ws';
 import {
   issueOpenClawBootstrapToken,
+  readOpenClawPermissions,
   readOpenClawInfo,
+  runOpenClawDoctor,
+  runOpenClawDoctorFix,
   type OpenClawInfo,
 } from './openclaw.js';
 import {
@@ -282,6 +285,21 @@ export class BridgeRuntime {
       return;
     }
 
+    if (control.event === 'doctor.request') {
+      await this.handleDoctorRequest(control);
+      return;
+    }
+
+    if (control.event === 'doctor-fix.request') {
+      await this.handleDoctorFixRequest(control);
+      return;
+    }
+
+    if (control.event === 'permissions.request') {
+      await this.handlePermissionsRequest(control);
+      return;
+    }
+
     const { event, count } = control;
     if (event === 'client_connected' || event === 'client_count') {
       const previousClientCount = this.snapshot.clientCount;
@@ -396,6 +414,132 @@ export class BridgeRuntime {
         targetClientId: replyTargetClientId || undefined,
         payload: {
           code: 'bootstrap_issue_failed',
+          message,
+        },
+      });
+    }
+  }
+
+  private async handleDoctorRequest(control: {
+    requestId?: string;
+    sourceClientId?: string;
+    targetClientId?: string;
+  }): Promise<void> {
+    const requestId = control.requestId?.trim() ?? '';
+    const replyTargetClientId = control.sourceClientId?.trim() || control.targetClientId?.trim() || '';
+    if (!requestId) {
+      this.log('relay doctor request dropped reason=missing_request_id');
+      return;
+    }
+
+    this.log(`relay doctor request received requestId=${requestId}`);
+    try {
+      const result = await runOpenClawDoctor();
+      this.log(
+        `relay doctor completed requestId=${requestId} ok=${result.ok} checks=${result.checks.length}`,
+      );
+      this.sendRelayControl({
+        event: 'doctor.result',
+        requestId,
+        targetClientId: replyTargetClientId || undefined,
+        payload: {
+          ok: result.ok,
+          checks: result.checks,
+          summary: result.summary,
+          raw: result.raw,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`relay doctor failed requestId=${requestId} error=${message}`);
+      this.sendRelayControl({
+        event: 'doctor.error',
+        requestId,
+        targetClientId: replyTargetClientId || undefined,
+        payload: {
+          code: 'doctor_failed',
+          message,
+        },
+      });
+    }
+  }
+
+  private async handleDoctorFixRequest(control: {
+    requestId?: string;
+    sourceClientId?: string;
+    targetClientId?: string;
+  }): Promise<void> {
+    const requestId = control.requestId?.trim() ?? '';
+    const replyTargetClientId = control.sourceClientId?.trim() || control.targetClientId?.trim() || '';
+    if (!requestId) {
+      this.log('relay doctor-fix request dropped reason=missing_request_id');
+      return;
+    }
+
+    this.log(`relay doctor-fix request received requestId=${requestId}`);
+    try {
+      const result = await runOpenClawDoctorFix();
+      this.log(
+        `relay doctor-fix completed requestId=${requestId} ok=${result.ok}`,
+      );
+      this.sendRelayControl({
+        event: 'doctor-fix.result',
+        requestId,
+        targetClientId: replyTargetClientId || undefined,
+        payload: {
+          ok: result.ok,
+          summary: result.summary,
+          raw: result.raw,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`relay doctor-fix failed requestId=${requestId} error=${message}`);
+      this.sendRelayControl({
+        event: 'doctor-fix.error',
+        requestId,
+        targetClientId: replyTargetClientId || undefined,
+        payload: {
+          code: 'doctor_fix_failed',
+          message,
+        },
+      });
+    }
+  }
+
+  private async handlePermissionsRequest(control: {
+    requestId?: string;
+    sourceClientId?: string;
+    targetClientId?: string;
+  }): Promise<void> {
+    const requestId = control.requestId?.trim() ?? '';
+    const replyTargetClientId = control.sourceClientId?.trim() || control.targetClientId?.trim() || '';
+    if (!requestId) {
+      this.log('relay permissions request dropped reason=missing_request_id');
+      return;
+    }
+
+    this.log(`relay permissions request received requestId=${requestId}`);
+    try {
+      const result = await readOpenClawPermissions();
+      this.log(
+        `relay permissions completed requestId=${requestId} execStatus=${result.exec.status} webStatus=${result.web.status}`,
+      );
+      this.sendRelayControl({
+        event: 'permissions.result',
+        requestId,
+        targetClientId: replyTargetClientId || undefined,
+        payload: result as unknown as Record<string, unknown>,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log(`relay permissions failed requestId=${requestId} error=${message}`);
+      this.sendRelayControl({
+        event: 'permissions.error',
+        requestId,
+        targetClientId: replyTargetClientId || undefined,
+        payload: {
+          code: 'permissions_failed',
           message,
         },
       });

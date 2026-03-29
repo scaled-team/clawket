@@ -1,11 +1,22 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, usePreventRemove } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Archive, ChevronRight, Eye, RotateCcw } from 'lucide-react-native';
+import {
+  Archive,
+  ChevronRight,
+  CircleAlert,
+  Eye,
+  RotateCcw,
+  Shield,
+  Stethoscope,
+  Wrench,
+} from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
+import { CopyableCommand } from '../../components/config/CopyableCommand';
 import { createCardContentStyle } from '../../components/ui';
 import { useAppContext } from '../../contexts/AppContext';
+import { useGatewayOverlay } from '../../contexts/GatewayOverlayContext';
 import { useProPaywall } from '../../contexts/ProPaywallContext';
 import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader';
 import { analyticsEvents } from '../../services/analytics/events';
@@ -16,6 +27,9 @@ import type { ConfigStackParamList } from './ConfigTab';
 import { useGatewayRuntimeSettings } from './hooks/useGatewayRuntimeSettings';
 
 type Navigation = NativeStackNavigationProp<ConfigStackParamList, 'OpenClawConfig'>;
+
+const UPDATE_CLAWKET_CLI_COMMAND = 'npm install -g @p697/clawket@latest';
+const RESTART_CLAWKET_CLI_COMMAND = 'clawket restart';
 
 type ActionRowProps = {
   title: string;
@@ -63,9 +77,13 @@ export function OpenClawConfigScreen(): React.JSX.Element {
   const { t } = useTranslation(['config', 'common']);
   const { theme } = useAppTheme();
   const { gateway, config: activeGatewayConfig, gatewayEpoch } = useAppContext();
+  const { showOverlay, hideOverlay } = useGatewayOverlay();
   const { requirePro } = useProPaywall();
   const styles = useMemo(() => createStyles(theme.colors), [theme.colors]);
   const [backingUpConfig, setBackingUpConfig] = useState(false);
+  const [runningDoctor, setRunningDoctor] = useState(false);
+  const [runningAutoFix, setRunningAutoFix] = useState(false);
+  const [actionLoadingVisible, setActionLoadingVisible] = useState(false);
   const runtimeSettings = useGatewayRuntimeSettings({
     gateway,
     gatewayEpoch,
@@ -116,6 +134,11 @@ export function OpenClawConfigScreen(): React.JSX.Element {
     navigation.navigate('GatewayConfigBackups');
   }, [navigation, requirePro]);
 
+  const handlePermissionsPress = useCallback(() => {
+    if (!requirePro('configBackups')) return;
+    navigation.navigate('OpenClawPermissions');
+  }, [navigation, requirePro]);
+
   const handleRestartGatewayConfirm = useCallback(() => {
     Alert.alert(
       t('Restart Current Gateway?'),
@@ -132,11 +155,114 @@ export function OpenClawConfigScreen(): React.JSX.Element {
     );
   }, [runtimeSettings, t]);
 
+  const handleDoctorPress = useCallback(async () => {
+    if (runningDoctor) return;
+    if (!requirePro('configBackups')) return;
+    setRunningDoctor(true);
+    setActionLoadingVisible(true);
+    showOverlay(t('Running openclaw doctor...'));
+
+    const openDiagnostics = (params: ConfigStackParamList['OpenClawDiagnostics']) => {
+      hideOverlay();
+      setActionLoadingVisible(false);
+      requestAnimationFrame(() => {
+        navigation.navigate('OpenClawDiagnostics', params);
+      });
+    };
+
+    try {
+      const result = await gateway.requestDoctor();
+      openDiagnostics({ mode: 'doctor', doctorResult: result });
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : '';
+      let doctorError = raw || t('Doctor command failed.');
+      if (raw === 'NOT_RELAY') {
+        doctorError = t('Diagnostics require a relay connection. Connect via Clawket Bridge to use this feature.');
+      } else if (raw === 'NOT_CONNECTED') {
+        doctorError = t('Not connected to gateway.');
+      }
+      openDiagnostics({ mode: 'doctor', doctorError });
+    } finally {
+      hideOverlay();
+      setRunningDoctor(false);
+    }
+  }, [gateway, hideOverlay, navigation, requirePro, runningDoctor, showOverlay, t]);
+
+  const handleAutoFixPress = useCallback(async () => {
+    if (runningAutoFix) return;
+    if (!requirePro('configBackups')) return;
+    setRunningAutoFix(true);
+    setActionLoadingVisible(true);
+    showOverlay(t('Running openclaw doctor --fix...'));
+
+    const openDiagnostics = (params: ConfigStackParamList['OpenClawDiagnostics']) => {
+      hideOverlay();
+      setActionLoadingVisible(false);
+      requestAnimationFrame(() => {
+        navigation.navigate('OpenClawDiagnostics', params);
+      });
+    };
+
+    try {
+      const result = await gateway.requestDoctorFix();
+      openDiagnostics({ mode: 'fix', fixResult: result });
+    } catch (err: unknown) {
+      const raw = err instanceof Error ? err.message : '';
+      let fixError = raw || t('Fix command failed.');
+      if (raw === 'NOT_RELAY') {
+        fixError = t('Diagnostics require a relay connection. Connect via Clawket Bridge to use this feature.');
+      } else if (raw === 'NOT_CONNECTED') {
+        fixError = t('Not connected to gateway.');
+      }
+      openDiagnostics({ mode: 'fix', fixError });
+    } finally {
+      hideOverlay();
+      setRunningAutoFix(false);
+    }
+  }, [gateway, hideOverlay, navigation, requirePro, runningAutoFix, showOverlay, t]);
+
+  const confirmAbortRunning = useCallback((onConfirm: () => void) => {
+    Alert.alert(
+      t('Confirm Exit?'),
+      t('Exit now? This will interrupt the current operation.'),
+      [
+        { text: t('common:Cancel'), style: 'cancel' },
+        {
+          text: t('common:Exit'),
+          style: 'destructive',
+          onPress: onConfirm,
+        },
+      ],
+    );
+  }, [t]);
+
+  usePreventRemove(actionLoadingVisible, ({ data }) => {
+    confirmAbortRunning(() => {
+      hideOverlay();
+      setActionLoadingVisible(false);
+      navigation.dispatch(data.action);
+    });
+  });
+
   useNativeStackModalHeader({
     navigation,
     title: t('OPENCLAW CONFIG'),
-    onClose: () => navigation.goBack(),
+    onClose: () => {
+      if (actionLoadingVisible) {
+        confirmAbortRunning(() => {
+          hideOverlay();
+          setActionLoadingVisible(false);
+          navigation.goBack();
+        });
+        return;
+      }
+      navigation.goBack();
+    },
   });
+
+  const hasActiveGateway = Boolean(activeGatewayConfig?.url);
+  const isRelayRoute = hasActiveGateway && gateway.getConnectionRoute() === 'relay';
+  const updateAgentPrompt = t('Please first upgrade the installed clawket client on this computer by running `npm install -g @p697/clawket@latest`, then run `clawket restart` after the installation completes.');
 
   return (
     <ScrollView contentContainerStyle={createCardContentStyle()}>
@@ -167,7 +293,7 @@ export function OpenClawConfigScreen(): React.JSX.Element {
           chevronColor={theme.colors.textSubtle}
           icon={(
             <View style={[styles.rowIconBadge, { backgroundColor: '#FFF1E5' }]}>
-              <Archive size={17} strokeWidth={2.2} color="#D96C1F" fill="#D96C1F" />
+              <Archive size={17} strokeWidth={2.2} color="#D96C1F" />
             </View>
           )}
         />
@@ -214,11 +340,111 @@ export function OpenClawConfigScreen(): React.JSX.Element {
                 <Text style={styles.rowTitle}>
                   {runtimeSettings.restartingGateway ? t('common:Loading...') : t('Restart Current Gateway')}
                 </Text>
+                <Text style={styles.rowSubtitle}>
+                  {t('Restart after changing config or making certain updates to ensure they take effect')}
+                </Text>
               </View>
             </View>
           </Pressable>
         </View>
       ) : null}
+
+      <View style={styles.secondaryCard}>
+        <ActionRow
+          title={t('OpenClaw Permission Management')}
+          subtitle={t('View and adjust common OpenClaw permissions')}
+          onPress={handlePermissionsPress}
+          styles={styles}
+          chevronColor={theme.colors.textSubtle}
+          icon={(
+            <View style={[styles.rowIconBadge, { backgroundColor: '#E8F7F0' }]}>
+              <Shield size={17} strokeWidth={2.2} color="#18794E" />
+            </View>
+          )}
+        />
+
+        <View style={styles.divider} />
+
+        <Pressable
+          onPress={() => { void handleDoctorPress(); }}
+          style={({ pressed }) => [
+            styles.row,
+            pressed && !runningDoctor && styles.rowPressed,
+            (runningDoctor || runningAutoFix || !hasActiveGateway) && styles.rowDisabled,
+          ]}
+          disabled={runningDoctor || runningAutoFix || !hasActiveGateway}
+        >
+          <View style={styles.rowLead}>
+            <View style={[styles.rowIconBadge, { backgroundColor: '#EDE9FE' }]}>
+              <Stethoscope size={17} strokeWidth={2.2} color="#7C3AED" />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>
+                {runningDoctor ? t('Running diagnostics...') : t('Status Diagnostics')}
+              </Text>
+              <Text style={styles.rowSubtitle}>
+                {isRelayRoute
+                  ? t('Remotely run diagnostics on your OpenClaw instance')
+                  : t('Requires relay connection to bridge')}
+              </Text>
+            </View>
+          </View>
+          <ChevronRight size={16} color={theme.colors.textSubtle} strokeWidth={2} />
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        <Pressable
+          onPress={() => { void handleAutoFixPress(); }}
+          style={({ pressed }) => [
+            styles.row,
+            pressed && !runningAutoFix && styles.rowPressed,
+            (runningDoctor || runningAutoFix || !hasActiveGateway) && styles.rowDisabled,
+            ]}
+          disabled={runningDoctor || runningAutoFix || !hasActiveGateway}
+        >
+          <View style={styles.rowLead}>
+            <View style={[styles.rowIconBadge, { backgroundColor: '#E9F8EE' }]}>
+              <Wrench size={17} strokeWidth={2.25} color="#248A4D" />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>
+                {runningAutoFix ? t('Running fix...') : t('Auto Fix')}
+              </Text>
+              <Text style={styles.rowSubtitle}>{t('Run openclaw doctor --fix')}</Text>
+            </View>
+          </View>
+          <ChevronRight size={16} color={theme.colors.textSubtle} strokeWidth={2} />
+        </Pressable>
+      </View>
+
+      <View style={styles.secondaryCard}>
+        <View style={styles.noticeCard}>
+          <View style={styles.noticeHeader}>
+            <CircleAlert size={16} strokeWidth={2} color={theme.colors.primary} />
+            <Text style={styles.noticeTitle}>{t('Keep Clawket CLI up to date')}</Text>
+          </View>
+          <Text style={styles.noticeBody}>
+            {t('When using advanced features, make sure your Clawket CLI is on the latest version.')}
+          </Text>
+          <Text style={styles.noticeBody}>
+            {t('If an advanced feature fails, try updating the package first. You can copy the command below and ask Agent to run it, or run it manually yourself.')}
+          </Text>
+          <Text style={styles.noticeLabel}>{t('Upgrade command')}</Text>
+          <CopyableCommand command={UPDATE_CLAWKET_CLI_COMMAND} />
+          <Text style={styles.noticeBody}>
+            {t('After the update finishes, please run `clawket restart` as well to ensure the new version takes effect.')}
+          </Text>
+          <Text style={styles.noticeLabel}>{t('Restart command')}</Text>
+          <CopyableCommand command={RESTART_CLAWKET_CLI_COMMAND} />
+          <Text style={styles.noticeBody}>
+            {t('If you want Agent to handle the whole process, copy the prompt below and send it directly.')}
+          </Text>
+          <Text style={styles.noticeLabel}>{t('Prompt for Agent')}</Text>
+          <CopyableCommand command={updateAgentPrompt} multiline />
+        </View>
+      </View>
+
     </ScrollView>
   );
 }
@@ -231,6 +457,7 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['theme']['colors'])
       borderColor: colors.border,
       backgroundColor: colors.surface,
       overflow: 'hidden',
+      marginTop: Space.xs,
     },
     secondaryCard: {
       marginTop: Space.lg,
@@ -289,6 +516,34 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['theme']['colors'])
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.borderStrong,
       marginLeft: Space.lg,
+    },
+    noticeCard: {
+      paddingHorizontal: Space.lg,
+      paddingVertical: Space.lg,
+      gap: Space.sm,
+      backgroundColor: colors.surface,
+    },
+    noticeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    noticeTitle: {
+      flex: 1,
+      color: colors.text,
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+    },
+    noticeBody: {
+      color: colors.textSubtle,
+      fontSize: FontSize.sm,
+      lineHeight: 20,
+    },
+    noticeLabel: {
+      color: colors.text,
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      marginTop: 2,
     },
   });
 }
