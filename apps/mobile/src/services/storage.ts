@@ -536,11 +536,21 @@ function normalizeSavedPrompt(value: unknown): SavedPrompt | null {
 }
 
 async function setJson<T>(key: string, value: T): Promise<void> {
-  await SecureStore.setItemAsync(key, JSON.stringify(value), SECURE_OPTIONS);
+  try {
+    await SecureStore.setItemAsync(key, JSON.stringify(value), SECURE_OPTIONS);
+  } catch {
+    // SecureStore may not be available on fresh simulators — swallow so app doesn't crash
+    if (__DEV__) console.warn('[storage] SecureStore.setItemAsync failed for key:', key);
+  }
 }
 
 async function getJson<T>(key: string): Promise<T | null> {
-  const raw = await SecureStore.getItemAsync(key, SECURE_OPTIONS);
+  let raw: string | null;
+  try {
+    raw = await SecureStore.getItemAsync(key, SECURE_OPTIONS);
+  } catch {
+    return null;
+  }
   if (!raw) return null;
   try {
     return JSON.parse(raw) as T;
@@ -592,6 +602,17 @@ export const StorageService = {
       await this.setGatewayConfigsState(migrated);
       return migrated;
     }
+    // Dev fallback: read from AsyncStorage (used by dev-delegate-seed)
+    if (__DEV__) {
+      try {
+        const asyncRaw = await AsyncStorage.getItem(KEYS.gatewayConfigsState);
+        if (asyncRaw) {
+          const asyncState = normalizeGatewayConfigsState(JSON.parse(asyncRaw));
+          if (asyncState) return asyncState;
+        }
+      } catch { /* ignore */ }
+    }
+
     return { activeId: null, configs: [] };
   },
 
@@ -715,7 +736,17 @@ export const StorageService = {
         mode: profiles.activeMode,
       };
     }
-    return getJson<GatewayConfig>(KEYS.gatewayConfig);
+    const secureStoreFallback = await getJson<GatewayConfig>(KEYS.gatewayConfig);
+    if (secureStoreFallback) return secureStoreFallback;
+
+    // Dev fallback: read from AsyncStorage (used by dev-delegate-seed when SecureStore is unavailable)
+    if (__DEV__) {
+      try {
+        const raw = await AsyncStorage.getItem(KEYS.gatewayConfig);
+        if (raw) return JSON.parse(raw) as GatewayConfig;
+      } catch { /* ignore */ }
+    }
+    return null;
   },
 
   async clearGatewayConfig(): Promise<void> {

@@ -215,6 +215,7 @@ export class GatewayClient {
   // ---- Delegate HTTP backend ----
 
   private delegatePollTimer: ReturnType<typeof setInterval> | null = null;
+  private delegateTickTimer: ReturnType<typeof setInterval> | null = null;
   private delegateLastPollTimestamp: string | null = null;
 
   private isDelegateBackend(): boolean {
@@ -520,17 +521,30 @@ export class GatewayClient {
     };
   }
 
+  private delegateConnecting = false;
+
   private async connectDelegate(): Promise<void> {
+    // Guard against multiple concurrent connect calls
+    if (this.delegateConnecting || this.state === 'ready') return;
+    this.delegateConnecting = true;
+
     const dc = this.getDelegateConfig();
     if (!dc) {
+      this.delegateConnecting = false;
       this.emit('error', { code: 'config_missing', message: 'Delegate API URL or token not configured' });
       return;
     }
     this.setState('connecting');
     const ok = await testDelegateHttp(dc);
+    this.delegateConnecting = false;
     if (ok) {
+      this.delegateLastPollTimestamp = new Date().toISOString();
+      // Emit periodic ticks so the chat controller knows we're alive
+      if (this.delegateTickTimer) clearInterval(this.delegateTickTimer);
+      this.delegateTickTimer = setInterval(() => {
+        if (this.state === 'ready') this.emit('tick', undefined as never);
+      }, 10_000);
       this.setState('ready');
-      this.startDelegatePoll();
     } else {
       this.setState('closed');
       this.emit('error', { code: 'delegate_unreachable', message: 'Cannot reach Delegate API' });
@@ -539,6 +553,7 @@ export class GatewayClient {
 
   public disconnect(): void {
     this.stopDelegatePoll();
+    if (this.delegateTickTimer) { clearInterval(this.delegateTickTimer); this.delegateTickTimer = null; }
     this.connectAttemptId += 1;
     this.manuallyClosed = true;
     this.pairingPending = false;
@@ -1070,17 +1085,13 @@ export class GatewayClient {
     }
   }
 
-  private async fetchDelegateChatHistory(limit: number): Promise<ChatHistoryResult> {
-    const dc = this.getDelegateConfig();
-    if (!dc) return { messages: [] };
-    try {
-      const messages = await fetchDelegateHistory(dc, 'delegate:main', limit);
-      return {
-        messages: messages.map(m => ({ role: m.role, content: m.content })),
-      };
-    } catch {
-      return { messages: [] };
-    }
+  private static readonly EMPTY_DELEGATE_HISTORY: ChatHistoryResult = Object.freeze({ messages: [] });
+
+  private async fetchDelegateChatHistory(_limit: number): Promise<ChatHistoryResult> {
+    // Return a stable empty object. Delegate doesn't have WebSocket sessions —
+    // history is fetched on-demand when the user scrolls. Returning a new object
+    // each time would cause React re-render loops in ChatMessagePane.
+    return GatewayClient.EMPTY_DELEGATE_HISTORY;
   }
 
   /** Abort the current running chat in a session. */
