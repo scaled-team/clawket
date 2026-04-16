@@ -958,8 +958,10 @@ function AppContent({
     [theme.colors.background],
   );
   const officeSource = useMemo(() => {
-    if (!__DEV__) return { html: themedOfficeHtml };
-    return { uri: resolveOfficeDevUrl() };
+    // In dev, use inline HTML unless an explicit dev URL override is set.
+    // The office-game Vite dev server (port 5174) is rarely running.
+    if (__DEV__ && DEV_URL_OVERRIDE?.trim()) return { uri: resolveOfficeDevUrl() };
+    return { html: themedOfficeHtml };
   }, [themedOfficeHtml]);
 
   useEffect(() => {
@@ -1069,9 +1071,9 @@ function AppContent({
                     headerShown: false,
                     tabBarStyle: {
                       backgroundColor: isWebViewScreen ? (theme.scheme === 'dark' ? '#000000' : '#FFFFFF') : theme.colors.surface,
-                      borderTopColor: theme.colors.border, height: 60, paddingTop: 8,
+                      borderTopColor: theme.colors.border, height: 84, paddingTop: 10, paddingBottom: 28,
                     },
-                    tabBarLabelStyle: { fontSize: 13, fontWeight: '600' as const },
+                    tabBarLabelStyle: { fontSize: 14, fontWeight: '600' as const },
                     tabBarIconStyle: { display: 'none' as const },
                   },
                 } : {
