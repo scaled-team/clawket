@@ -28,6 +28,13 @@ import {
 import type { AgentInfo, AgentsListResult, AgentCreateResult, AgentUpdateResult, AgentDeleteResult } from '../types/agent';
 import type { CostSummary, UsageResult } from '../types/usage';
 import type { ToolsCatalogResult } from '../types/index';
+import {
+  testDelegateHttp,
+  pollDelegateMessages,
+  sendDelegateReply,
+  fetchDelegateHistory,
+  type DelegateConnectionConfig,
+} from './delegate-http-adapter';
 import type { NodeInvokeRequest, CanvasPresentPayload, CanvasNavigatePayload, CanvasEvalPayload, CanvasSnapshotPayload } from '../types/canvas';
 import type {
   HermesCronJob,
@@ -205,6 +212,63 @@ export class GatewayClient {
     error: new Set(),
   };
 
+  // ---- Delegate HTTP backend ----
+
+  private delegatePollTimer: ReturnType<typeof setInterval> | null = null;
+  private delegateLastPollTimestamp: string | null = null;
+
+  private isDelegateBackend(): boolean {
+    return this.config?.backendKind === 'delegate';
+  }
+
+  private getDelegateConfig(): DelegateConnectionConfig | null {
+    const delegate = this.config?.delegate;
+    if (!delegate?.apiUrl || !delegate?.apiToken) return null;
+    return { apiUrl: delegate.apiUrl, apiToken: delegate.apiToken };
+  }
+
+  private startDelegatePoll(): void {
+    this.stopDelegatePoll();
+    const interval = this.config?.delegate?.pollIntervalMs ?? 5000;
+    this.delegatePollTimer = setInterval(() => void this.pollDelegate(), interval);
+  }
+
+  private stopDelegatePoll(): void {
+    if (this.delegatePollTimer) {
+      clearInterval(this.delegatePollTimer);
+      this.delegatePollTimer = null;
+    }
+  }
+
+  private async pollDelegate(): Promise<void> {
+    const dc = this.getDelegateConfig();
+    if (!dc) return;
+    try {
+      const result = await pollDelegateMessages(
+        dc,
+        'delegate:main',
+        this.delegateLastPollTimestamp ?? new Date(Date.now() - 60_000).toISOString(),
+        20,
+      );
+      if (result.messages.length > 0) {
+        const lastMsg = result.messages[result.messages.length - 1];
+        this.delegateLastPollTimestamp = lastMsg.timestamp;
+        // Emit agent messages as chat events so the UI renders them
+        for (const msg of result.messages) {
+          if (msg.role === 'agent' || msg.isAI) {
+            this.emit('chatFinal', {
+              runId: msg.id,
+              sessionKey: 'main',
+              message: { role: 'assistant', content: msg.text },
+            });
+          }
+        }
+      }
+    } catch {
+      // Silently retry on next interval
+    }
+  }
+
   // ---- Public API ----
 
   public getGatewayInfo(): GatewayInfo | null {
@@ -227,7 +291,9 @@ export class GatewayClient {
       || prev.relay?.serverUrl !== config.relay?.serverUrl
       || prev.relay?.clientToken !== config.relay?.clientToken
       || prev.relay?.protocolVersion !== config.relay?.protocolVersion
-      || prev.relay?.supportsBootstrap !== config.relay?.supportsBootstrap;
+      || prev.relay?.supportsBootstrap !== config.relay?.supportsBootstrap
+      || prev.delegate?.apiUrl !== config.delegate?.apiUrl
+      || prev.delegate?.apiToken !== config.delegate?.apiToken;
     if (hasMaterialChange) {
       this.clearReconnectBlock();
       this.clearGatewayMetadataCaches();
@@ -276,6 +342,12 @@ export class GatewayClient {
   }
 
   public connect(): void {
+    // Delegate uses HTTP polling, not WebSocket
+    if (this.isDelegateBackend()) {
+      void this.connectDelegate();
+      return;
+    }
+
     if (this.reconnectBlockedReason) {
       this.emitBlockedReconnectError();
       return;
@@ -448,7 +520,25 @@ export class GatewayClient {
     };
   }
 
+  private async connectDelegate(): Promise<void> {
+    const dc = this.getDelegateConfig();
+    if (!dc) {
+      this.emit('error', { code: 'config_missing', message: 'Delegate API URL or token not configured' });
+      return;
+    }
+    this.setState('connecting');
+    const ok = await testDelegateHttp(dc);
+    if (ok) {
+      this.setState('ready');
+      this.startDelegatePoll();
+    } else {
+      this.setState('closed');
+      this.emit('error', { code: 'delegate_unreachable', message: 'Cannot reach Delegate API' });
+    }
+  }
+
   public disconnect(): void {
+    this.stopDelegatePoll();
     this.connectAttemptId += 1;
     this.manuallyClosed = true;
     this.pairingPending = false;
@@ -862,6 +952,11 @@ export class GatewayClient {
     attachments?: Array<{ type: string; mimeType: string; content: string }>,
     options?: { idempotencyKey?: string },
   ): Promise<{ runId: string }> {
+    // Delegate backend: post via HTTP and poll for agent reply
+    if (this.isDelegateBackend()) {
+      return this.sendDelegateChat(text, options?.idempotencyKey);
+    }
+
     const idempotencyKey = options?.idempotencyKey ?? generateId();
     const result = await this.sendRequest('chat.send', {
       sessionKey,
@@ -875,8 +970,72 @@ export class GatewayClient {
     return { runId: payload?.runId ?? idempotencyKey };
   }
 
+  private async sendDelegateChat(text: string, idempotencyKey?: string): Promise<{ runId: string }> {
+    const dc = this.getDelegateConfig();
+    if (!dc) throw new Error('Delegate not configured');
+    const runId = idempotencyKey ?? generateId();
+
+    // Post the user's message as a reply to delegate:main
+    const result = await sendDelegateReply(dc, 'delegate:main', text);
+
+    // Mark the timestamp so next poll picks up the agent's response
+    this.delegateLastPollTimestamp = new Date().toISOString();
+
+    // Emit a chat run start so the UI shows "thinking"
+    this.emit('chatRunStart', {
+      runId: result.messageId ?? runId,
+      sessionKey: 'main',
+    });
+
+    // Poll for the agent's reply with exponential backoff
+    void this.waitForDelegateReply(dc, runId);
+
+    return { runId: result.messageId ?? runId };
+  }
+
+  private async waitForDelegateReply(dc: DelegateConnectionConfig, runId: string): Promise<void> {
+    const startTime = Date.now();
+    const pollTimestamp = new Date(startTime - 1000).toISOString();
+    let attempts = 0;
+
+    while (Date.now() - startTime < 120_000) { // 2 min timeout
+      attempts++;
+      const delay = Math.min(2000 * Math.pow(1.3, attempts - 1), 10_000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      try {
+        const result = await pollDelegateMessages(dc, 'delegate:main', pollTimestamp, 5);
+        const agentMessages = result.messages.filter(m => m.role === 'agent' || m.isAI);
+        if (agentMessages.length > 0) {
+          const latest = agentMessages[agentMessages.length - 1];
+          this.delegateLastPollTimestamp = latest.timestamp;
+          this.emit('chatFinal', {
+            runId,
+            sessionKey: 'main',
+            message: { role: 'assistant', content: latest.text },
+          });
+          return;
+        }
+      } catch {
+        // Retry
+      }
+    }
+
+    // Timeout — emit error
+    this.emit('chatError', {
+      runId,
+      sessionKey: 'main',
+      message: 'Agent did not respond within 2 minutes',
+    });
+  }
+
   /** Fetch chat history for a session. */
   public async fetchHistory(sessionKey: string, limit = 50): Promise<ChatHistoryResult> {
+    // Delegate backend: fetch via HTTP poll
+    if (this.isDelegateBackend()) {
+      return this.fetchDelegateChatHistory(limit);
+    }
+
     const cacheKey = `${sessionKey}::${limit}`;
     const cached = this.readTimedCache(this.historyCache.get(cacheKey));
     if (cached) return cached;
@@ -908,6 +1067,19 @@ export class GatewayClient {
       return await request;
     } finally {
       this.pendingHistoryRequests.delete(cacheKey);
+    }
+  }
+
+  private async fetchDelegateChatHistory(limit: number): Promise<ChatHistoryResult> {
+    const dc = this.getDelegateConfig();
+    if (!dc) return { messages: [] };
+    try {
+      const messages = await fetchDelegateHistory(dc, 'delegate:main', limit);
+      return {
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      };
+    } catch {
+      return { messages: [] };
     }
   }
 

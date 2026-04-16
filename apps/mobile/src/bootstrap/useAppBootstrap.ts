@@ -12,6 +12,7 @@ import {
   buildPrimarySessionPreview,
   PRIMARY_CACHED_AGENT_ID,
 } from '../utils/primary-session-cache';
+import { seedDelegateConfigIfNeeded } from './dev-delegate-seed';
 import {
   isBackendScopedMainSessionKey,
   resolveMainSessionKey,
@@ -71,8 +72,9 @@ export function useAppBootstrap({ gateway, nodeClient }: Props) {
   const [initialChatPreview, setInitialChatPreview] = useState<LastOpenedSessionSnapshot | null>(null);
 
   useEffect(() => {
-    const gatewayConfigsStatePromise = StorageService.getGatewayConfigsState();
-    const configPromise = StorageService.getGatewayConfig();
+    const seedPromise = seedDelegateConfigIfNeeded();
+    const gatewayConfigsStatePromise = seedPromise.then(() => StorageService.getGatewayConfigsState());
+    const configPromise = seedPromise.then(() => StorageService.getGatewayConfig());
     configPromise.then((saved) => {
       setConfig(saved);
       gateway.configure(saved);

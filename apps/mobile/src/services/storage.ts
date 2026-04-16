@@ -700,6 +700,7 @@ export const StorageService = {
         mode: active.mode,
         hermes: active.hermes,
         relay: active.relay,
+        delegate: active.delegate,
       };
     }
 
