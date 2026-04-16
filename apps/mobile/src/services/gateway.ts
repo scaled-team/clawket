@@ -539,11 +539,11 @@ export class GatewayClient {
     this.delegateConnecting = false;
     if (ok) {
       this.delegateLastPollTimestamp = new Date().toISOString();
-      // Emit periodic ticks so the chat controller knows we're alive
       if (this.delegateTickTimer) clearInterval(this.delegateTickTimer);
       this.delegateTickTimer = setInterval(() => {
         if (this.state === 'ready') this.emit('tick', undefined as never);
       }, 10_000);
+      console.log('[delegate] HTTP connection test passed — setting state to ready');
       this.setState('ready');
     } else {
       this.setState('closed');

@@ -229,7 +229,7 @@ function useDashboardData() {
   const cacheScope = useMemo(() => resolveDashboardCacheScope(config, currentAgentId), [config, currentAgentId]);
   const [data, setData] = useState<DashboardData>({
     ...EMPTY_DASHBOARD,
-    agentName: hasGateway ? t('Connecting') : t('Hello?'),
+    agentName: config?.backendKind === 'delegate' ? 'Delegate Agent' : hasGateway ? t('Connecting') : t('Hello?'),
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -255,7 +255,7 @@ function useDashboardData() {
     if (!cacheScope) {
       setData({
         ...EMPTY_DASHBOARD,
-        agentName: hasGateway ? t('Connecting') : t('Hello?'),
+        agentName: config?.backendKind === 'delegate' ? 'Delegate Agent' : hasGateway ? t('Connecting') : t('Hello?'),
       });
       setLoading(false);
       return () => {
@@ -308,7 +308,7 @@ function useDashboardData() {
     if (!gateway) {
       setData({
         ...EMPTY_DASHBOARD,
-        agentName: hasGateway ? t('Connecting') : t('Hello?'),
+        agentName: config?.backendKind === 'delegate' ? 'Delegate Agent' : hasGateway ? t('Connecting') : t('Hello?'),
       });
       setLoading(false);
       logAppTelemetry('console_dashboard', 'refresh_end', {
@@ -389,13 +389,15 @@ function useDashboardData() {
         t,
       });
 
+      const isDelegateBackend = config?.backendKind === 'delegate';
       const nextData: DashboardData = {
         agentName: identity?.name
           ? identity.name
+          : isDelegateBackend ? 'Delegate Agent'
           : hasGateway ? t('Connecting') : t('Hello?'),
         agentEmoji: identity?.emoji
           ? identity.emoji
-          : '🤖',
+          : isDelegateBackend ? '🎯' : '🤖',
         cost: fallbackCostLabel,
         costDisplayLabel: dashboardCostDisplay.valueLabel,
         costBadge: dashboardCostDisplay.badge,
@@ -627,6 +629,10 @@ function OpenClawConsoleMenuScreen(): React.JSX.Element {
     [locale],
   );
   const snapshotStatusLabel = useMemo(() => {
+    // Delegate backend uses HTTP — show Connected when gateway is ready
+    if (config?.backendKind === 'delegate' && connectionState === 'ready') {
+      return t('Connected via HTTP');
+    }
     if (!lastUpdatedAt) {
       if (lastRefreshError && connectionState !== 'ready') return t('Offline');
       return null;

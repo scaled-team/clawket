@@ -30,7 +30,8 @@ export async function testDelegateHttp(config: DelegateConnectionConfig): Promis
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${config.apiToken}` },
     });
-    return res.ok;
+    // 401 = bad token (not connected), 5xx = server reachable but having issues (connected)
+    return res.status !== 401;
   } catch {
     return false;
   }

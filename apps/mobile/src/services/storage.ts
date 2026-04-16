@@ -377,6 +377,29 @@ function normalizeHermesConfig(
   };
 }
 
+function normalizeDelegateConfig(
+  value: unknown,
+): {
+  apiUrl: string;
+  apiToken: string;
+  displayName?: string;
+  pollIntervalMs?: number;
+} | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  const apiUrl = typeof record.apiUrl === 'string' ? record.apiUrl.trim() : '';
+  const apiToken = typeof record.apiToken === 'string' ? record.apiToken.trim() : '';
+  if (!apiUrl || !apiToken) return undefined;
+  const displayName = typeof record.displayName === 'string' ? record.displayName.trim() : '';
+  const pollIntervalMs = typeof record.pollIntervalMs === 'number' ? record.pollIntervalMs : undefined;
+  return {
+    apiUrl,
+    apiToken,
+    displayName: displayName || undefined,
+    pollIntervalMs,
+  };
+}
+
 function normalizeProfiles(value: unknown): GatewayProfilesConfig | null {
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
@@ -407,6 +430,7 @@ function normalizeSavedGatewayConfig(value: unknown): SavedGatewayConfig | null 
   const password = typeof record.password === 'string' && record.password.trim() ? record.password.trim() : undefined;
   const relay = normalizeRelayConfig(record.relay);
   const hermes = normalizeHermesConfig(record.hermes);
+  const delegate = normalizeDelegateConfig(record.delegate);
   const backendKind = resolveGatewayBackendKind({
     backendKind: normalizeBackendKind(record.backendKind),
     mode,
@@ -439,6 +463,7 @@ function normalizeSavedGatewayConfig(value: unknown): SavedGatewayConfig | null 
     password,
     hermes,
     relay,
+    delegate,
     createdAt,
     updatedAt,
   };
