@@ -1417,14 +1417,28 @@ export class GatewayClient {
       try {
         const delegateAgents = await fetchDelegateAgents(dc);
         if (!delegateAgents) return { defaultId: 'main', mainKey: 'main', agents: [] };
-        const agents: AgentInfo[] = delegateAgents.map((a) => ({
-          id: a.id,
-          name: a.name,
-          identity: {
+        const roleEmojis: Record<string, string> = {
+          'cto': '🧠', 'ceo': '👔', 'coo': '📊', 'cfo': '💰',
+          'lead developer': '⚡', 'senior developer': '💻', 'developer': '🖥️',
+          'product manager': '📋', 'designer': '🎨', 'ux/ui designer': '🎨',
+          'qa engineer': '🔍', 'devops engineer': '🔧', 'data scientist': '📈',
+          'security engineer': '🔐', 'architect': '🏗️', 'sentry auto-fix agent': '🛠️',
+        };
+        const agents: AgentInfo[] = delegateAgents.map((a) => {
+          const roleKey = a.role.toLowerCase();
+          const emoji = !a.isActive ? '⏸️'
+            : a.orchestrationStatus === 'active' ? '🟢'
+            : roleEmojis[roleKey] ?? '🎯';
+          return {
+            id: a.id,
             name: a.name,
-            emoji: a.isActive ? (a.orchestrationStatus === 'active' ? '🟢' : '🎯') : '⏸️',
-          },
-        }));
+            identity: {
+              name: a.name,
+              emoji,
+              avatar: a.avatar ?? undefined,
+            },
+          };
+        });
         const result: AgentsListResult = {
           defaultId: agents[0]?.id ?? 'main',
           mainKey: 'main',
