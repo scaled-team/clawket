@@ -341,6 +341,16 @@ function useDashboardData() {
             if (formatted.count == null) return t(formatted.key);
             return t(formatted.key, { count: formatted.count });
           })();
+          // Format cost
+          const costUsd = dashData.usage.totalCostCents / 100;
+          const costLabel = costUsd > 0 ? `$${costUsd.toFixed(1)}` : '$0';
+          // Format tokens
+          const totalTokens = dashData.usage.totalTokens;
+          const tokensLabel = totalTokens >= 1_000_000
+            ? `${(totalTokens / 1_000_000).toFixed(1)}M`
+            : totalTokens >= 1_000 ? `${(totalTokens / 1_000).toFixed(0)}K`
+            : String(totalTokens);
+
           const nextData: DashboardData = {
             agentName: 'Delegate Agent',
             agentEmoji: '🎯',
@@ -348,18 +358,18 @@ function useDashboardData() {
             sessions: dashData.stats.totalDelegations,
             messages: dashData.messages.total,
             lastHeartbeat,
-            cost: null,
-            costDisplayLabel: null,
+            cost: costLabel,
+            costDisplayLabel: costLabel,
             costBadge: null,
-            tokens: null,
+            tokens: tokensLabel,
             channels: null,
-            cronTotal: null,
-            cronFailed: null,
-            skills: null,
-            tools: null,
+            cronTotal: dashData.cron.total,
+            cronFailed: 0,
+            skills: dashData.skills,
+            tools: dashData.usage.totalCalls,
             models: null,
             files: null,
-            userMessages: null,
+            userMessages: dashData.messages.recent.filter(m => !m.isAI).length,
             toolCalls: null,
             nodes: null,
             nodeSummary: null,

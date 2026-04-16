@@ -96,8 +96,11 @@ type RootStackParamList = {
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const NativeTab = createNativeBottomTabNavigator<RootTabParamList>();
 const JsTab = createBottomTabNavigator<RootTabParamList>();
+// Use JS tab navigator in Expo Go (native tabs require prebuild).
+// Production builds via `eas build` get native iOS tabs.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Tab = (Platform.OS === 'ios' ? NativeTab : JsTab) as any;
+const useNativeIOSTabs = !__DEV__ && Platform.OS === 'ios';
+const Tab = (useNativeIOSTabs ? NativeTab : JsTab) as any;
 const LOADING_THEME = buildTheme('light', 'light', builtInAccents[defaultAccentId]);
 export default function App(): React.JSX.Element {
   const [gateway] = useState(() => new GatewayClient());
@@ -1061,7 +1064,7 @@ function AppContent({
                 {...(isWebViewScreen && Platform.OS === 'ios' ? {
                   tabBarStyle: { backgroundColor: theme.scheme === 'dark' ? '#000000' : '#FFFFFF' },
                 } : {})}
-                {...(Platform.OS === 'android' ? {
+                {...(!useNativeIOSTabs ? {
                   screenOptions: {
                     headerShown: false,
                     tabBarStyle: {
@@ -1090,7 +1093,7 @@ function AppContent({
                     lazy: backendKind === 'delegate',
                     tabBarLabel: t('Chat'),
                     tabBarBadge: hasUnreadChat ? '' : undefined,
-                    ...(Platform.OS === 'ios' ? {
+                    ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'message.fill' : 'message' }),
                     } : {}),
                   }}
@@ -1100,7 +1103,7 @@ function AppContent({
                   component={OfficeTab}
                   options={{
                     tabBarLabel: t('Office'),
-                    ...(Platform.OS === 'ios' ? {
+                    ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'building.2.fill' : 'building.2' }),
                     } : {}),
                   }}
@@ -1110,7 +1113,7 @@ function AppContent({
                   component={ConsoleTab}
                   options={{
                     tabBarLabel: t('Console'),
-                    ...(Platform.OS === 'ios' ? {
+                    ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'terminal.fill' : 'terminal' }),
                     } : {}),
                   }}
@@ -1120,7 +1123,7 @@ function AppContent({
                   component={ConfigTab}
                   options={{
                     tabBarLabel: t('Setting'),
-                    ...(Platform.OS === 'ios' ? {
+                    ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'gearshape.fill' : 'gearshape' }),
                     } : {}),
                   }}

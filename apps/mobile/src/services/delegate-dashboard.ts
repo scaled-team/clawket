@@ -45,6 +45,16 @@ export type DelegateDashboardData = {
     failedDelegations: number;
     completedDelegations: number;
   };
+  usage: {
+    totalTokens: number;
+    totalCostCents: number;
+    totalCalls: number;
+  };
+  skills: number;
+  cron: {
+    total: number;
+    enabled: number;
+  };
   heartbeat: {
     lastSeen: string | null;
     status: 'online' | 'stale' | 'offline';
