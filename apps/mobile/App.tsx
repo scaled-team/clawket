@@ -1055,6 +1055,7 @@ function AppContent({
           >
             {() => (
               <Tab.Navigator
+                initialRouteName={backendKind === 'delegate' ? 'Console' : 'Chat'}
                 tabBarActiveTintColor={theme.colors.primary}
                 tabBarInactiveTintColor={theme.colors.textMuted}
                 {...(isWebViewScreen && Platform.OS === 'ios' ? {
@@ -1086,6 +1087,7 @@ function AppContent({
                     },
                   }}
                   options={{
+                    lazy: backendKind === 'delegate',
                     tabBarLabel: t('Chat'),
                     tabBarBadge: hasUnreadChat ? '' : undefined,
                     ...(Platform.OS === 'ios' ? {

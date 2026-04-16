@@ -581,6 +581,11 @@ export class GatewayClient {
    * Useful when app resumes from background and socket looks stale.
    */
   public reconnect(): void {
+    // Delegate backend: just re-test HTTP connectivity
+    if (this.isDelegateBackend()) {
+      void this.connectDelegate();
+      return;
+    }
     if (this.reconnectBlockedReason) {
       this.clearReconnectBlock();
     }
@@ -679,6 +684,9 @@ export class GatewayClient {
 
   /** Fetch session list from Gateway. */
   public async listSessions(opts?: { limit?: number }): Promise<SessionInfo[]> {
+    // Delegate backend has no WebSocket sessions
+    if (this.isDelegateBackend()) return [];
+
     const cacheKey = String(opts?.limit ?? 100);
     const cached = this.readTimedCache(this.sessionListCache.get(cacheKey));
     if (cached) return cached;
@@ -1748,6 +1756,11 @@ export class GatewayClient {
     options?: { timeoutMs?: number; skipAutoReconnectOnTimeout?: boolean },
   ): Promise<unknown> {
     return new Promise<unknown>((resolve, reject) => {
+      // Delegate backend uses HTTP, not WebSocket — reject WS-only requests silently
+      if (this.isDelegateBackend()) {
+        reject(new Error(`Delegate backend does not support WebSocket method: ${method}`));
+        return;
+      }
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         if (method !== 'connect' && this.state === 'ready') {
           this.recoverStaleTransport(`request without open socket: ${method}`);
