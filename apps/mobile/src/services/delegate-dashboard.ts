@@ -51,6 +51,13 @@ export type DelegateDashboardData = {
   };
 };
 
+export async function fetchDelegateAgents(
+  config: DelegateConnectionConfig,
+): Promise<DelegateDashboardData['agents'] | null> {
+  const dashboard = await fetchDelegateDashboard(config);
+  return dashboard?.agents ?? null;
+}
+
 export async function fetchDelegateDashboard(
   config: DelegateConnectionConfig,
 ): Promise<DelegateDashboardData | null> {

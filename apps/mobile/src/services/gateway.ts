@@ -35,6 +35,7 @@ import {
   fetchDelegateHistory,
   type DelegateConnectionConfig,
 } from './delegate-http-adapter';
+import { fetchDelegateAgents } from './delegate-dashboard';
 import type { NodeInvokeRequest, CanvasPresentPayload, CanvasNavigatePayload, CanvasEvalPayload, CanvasSnapshotPayload } from '../types/canvas';
 import type {
   HermesCronJob,
@@ -1407,6 +1408,35 @@ export class GatewayClient {
 
   /** List all configured agents from Gateway. */
   public async listAgents(): Promise<AgentsListResult> {
+    // Delegate backend: fetch agents via HTTP API
+    if (this.isDelegateBackend()) {
+      const cached = this.readTimedCache(this.agentsListCache);
+      if (cached) return cached;
+      const dc = this.getDelegateConfig();
+      if (!dc) return { defaultId: 'main', mainKey: 'main', agents: [] };
+      try {
+        const delegateAgents = await fetchDelegateAgents(dc);
+        if (!delegateAgents) return { defaultId: 'main', mainKey: 'main', agents: [] };
+        const agents: AgentInfo[] = delegateAgents.map((a) => ({
+          id: a.id,
+          name: a.name,
+          identity: {
+            name: a.name,
+            emoji: a.isActive ? (a.orchestrationStatus === 'active' ? '🟢' : '🎯') : '⏸️',
+          },
+        }));
+        const result: AgentsListResult = {
+          defaultId: agents[0]?.id ?? 'main',
+          mainKey: 'main',
+          agents,
+        };
+        this.agentsListCache = { value: result, expiresAt: Date.now() + AGENT_LIST_CACHE_TTL_MS };
+        return result;
+      } catch {
+        return { defaultId: 'main', mainKey: 'main', agents: [] };
+      }
+    }
+
     const cached = this.readTimedCache(this.agentsListCache);
     if (cached) return cached;
     if (this.pendingAgentsListRequest) return this.pendingAgentsListRequest;
