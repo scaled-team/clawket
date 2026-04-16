@@ -97,6 +97,7 @@ function getBackendLabels(t: (key: string) => string): Record<GatewayBackendKind
   return {
     openclaw: t('OpenClaw'),
     hermes: t('Hermes'),
+    delegate: t('Delegate'),
   };
 }
 

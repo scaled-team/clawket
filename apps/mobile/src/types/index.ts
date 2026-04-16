@@ -30,9 +30,16 @@ export interface HermesGatewayConfig {
   displayName?: string;
 }
 
-export type GatewayBackendKind = 'openclaw' | 'hermes';
+export interface DelegateGatewayConfig {
+  apiUrl: string;
+  apiToken: string;
+  displayName?: string;
+  pollIntervalMs?: number;
+}
+
+export type GatewayBackendKind = 'openclaw' | 'hermes' | 'delegate';
 export type GatewayTransportKind = 'local' | 'tailscale' | 'cloudflare' | 'custom' | 'relay';
-export type GatewayMode = GatewayTransportKind | 'hermes';
+export type GatewayMode = GatewayTransportKind | 'hermes' | 'delegate';
 
 export interface GatewayConfig {
   url: string;
@@ -44,6 +51,7 @@ export interface GatewayConfig {
   mode?: GatewayMode;
   relay?: RelayGatewayConfig;
   hermes?: HermesGatewayConfig;
+  delegate?: DelegateGatewayConfig;
   debugMode?: boolean;
 }
 
@@ -74,6 +82,7 @@ export interface SavedGatewayConfig {
   password?: string;
   relay?: RelayGatewayConfig;
   hermes?: HermesGatewayConfig;
+  delegate?: DelegateGatewayConfig;
   createdAt: number;
   updatedAt: number;
 }

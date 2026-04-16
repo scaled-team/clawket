@@ -27,6 +27,7 @@ import {
   getHermesRelayConfigPath,
   getPairingConfigPath,
   buildHermesLocalPairingQrPayload,
+  buildDelegateLocalPairingQrPayload,
   pairHermesRelay,
   getServicePaths,
   getServiceStatus,
@@ -60,6 +61,8 @@ import {
   resolveGatewayAuth,
   resolveGatewayUrl,
   restartOpenClawGateway,
+  readDelegateInfo,
+  testDelegateConnection,
 } from '@clawket/bridge-runtime';
 
 const HERMES_SERVICE_WATCHDOG_INTERVAL_MS = 30_000;
@@ -71,6 +74,11 @@ async function main(): Promise<void> {
 
   if (command === 'hermes') {
     await handleHermesCommand(args, jsonOutput);
+    return;
+  }
+
+  if (command === 'delegate') {
+    await handleDelegateCommand(args, jsonOutput);
     return;
   }
 
@@ -316,7 +324,7 @@ type HermesLocalPairingResult = {
   qrImagePath: string;
 };
 
-type PairBackendKind = 'openclaw' | 'hermes';
+type PairBackendKind = 'openclaw' | 'hermes' | 'delegate';
 
 type PairTransportKind = 'relay' | 'local';
 
@@ -365,6 +373,10 @@ async function handlePairCommand(args: string[], jsonOutput: boolean): Promise<v
 
   if (backends.length === 1) {
     const only = backends[0];
+    if (only === 'delegate') {
+      await handleDelegateLocalPairCommand(args, jsonOutput);
+      return;
+    }
     if (localPair) {
       if (only === 'hermes') {
         await handleHermesLocalPairCommand(args, jsonOutput);
@@ -391,7 +403,9 @@ async function handlePairCommand(args: string[], jsonOutput: boolean): Promise<v
           : await performOpenClawLocalPairing(args)
         : backend === 'hermes'
           ? await performHermesRelayPairing(args)
-          : await performOpenClawRelayPairing(args);
+          : backend === 'delegate'
+            ? await performDelegateLocalPairing(args)
+            : await performOpenClawRelayPairing(args);
       successes.push(result);
     } catch (error) {
       failures.push({
@@ -551,6 +565,9 @@ function detectAvailablePairBackends(): PairBackendKind[] {
   if (canPairHermes()) {
     backends.push('hermes');
   }
+  if (canPairDelegate()) {
+    backends.push('delegate');
+  }
   return backends;
 }
 
@@ -564,6 +581,19 @@ function canPairOpenClaw(): boolean {
 
 function canPairHermes(): boolean {
   return Boolean(readHermesBridgeCliConfig()?.token || existsSync(resolveDefaultHermesSourcePath()));
+}
+
+function canPairDelegate(): boolean {
+  const configPath = join(homedir(), '.clawket', 'delegate.json');
+  if (existsSync(configPath)) {
+    try {
+      const raw = JSON.parse(readFileSync(configPath, 'utf8'));
+      return Boolean(raw.apiUrl && raw.apiToken);
+    } catch {
+      return false;
+    }
+  }
+  return Boolean(process.env.DELEGATE_API_URL && process.env.DELEGATE_API_TOKEN);
 }
 
 function resolveDefaultHermesSourcePath(): string {
@@ -1686,6 +1716,11 @@ function resolvePairServer(args: string[], backend: PairBackendKind): string {
   const explicit = readFlag(args, '--server') ?? readFlag(args, '-s');
   if (explicit?.trim()) return explicit;
 
+  if (backend === 'delegate') {
+    // Delegate uses direct HTTP, no relay server needed
+    return readDelegateCliConfig()?.apiUrl ?? process.env.DELEGATE_API_URL?.trim() ?? 'https://delegate.ws';
+  }
+
   if (backend === 'hermes') {
     const hermesServer = process.env.CLAWKET_HERMES_REGISTRY_URL?.trim()
       || process.env.CLAWKET_PACKAGE_DEFAULT_HERMES_REGISTRY_URL?.trim()
@@ -1713,7 +1748,7 @@ function readPairSubcommand(args: string[]): string | null {
   return null;
 }
 
-function resolveRequestedPairBackend(args: string[]): 'openclaw' | 'hermes' | null {
+function resolveRequestedPairBackend(args: string[]): PairBackendKind | null {
   const backend = readFlag(args, '--backend')?.toLowerCase();
   if (!backend) {
     return null;
@@ -1724,7 +1759,10 @@ function resolveRequestedPairBackend(args: string[]): 'openclaw' | 'hermes' | nu
   if (backend === 'hermes') {
     return 'hermes';
   }
-  throw new Error(`Unsupported local pairing backend "${backend}". Use --backend openclaw or --backend hermes.`);
+  if (backend === 'delegate') {
+    return 'delegate';
+  }
+  throw new Error(`Unsupported pairing backend "${backend}". Use --backend openclaw, --backend hermes, or --backend delegate.`);
 }
 
 async function ensureHermesPairingRuntimeReady(args: string[]): Promise<{
@@ -2203,6 +2241,180 @@ function deleteHermesBridgeCliConfig(): void {
     return;
   }
   rmSync(HERMES_BRIDGE_CONFIG_PATH, { force: true });
+}
+
+// ─── Delegate Backend ───
+
+const DELEGATE_CONFIG_PATH = join(homedir(), '.clawket', 'delegate.json');
+
+type DelegateCliConfig = {
+  apiUrl: string;
+  apiToken: string;
+  displayName?: string;
+};
+
+function readDelegateCliConfig(): DelegateCliConfig | null {
+  if (!existsSync(DELEGATE_CONFIG_PATH)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(DELEGATE_CONFIG_PATH, 'utf8')) as Record<string, unknown>;
+    const apiUrl = typeof raw.apiUrl === 'string' ? raw.apiUrl.trim() : '';
+    const apiToken = typeof raw.apiToken === 'string' ? raw.apiToken.trim() : '';
+    if (!apiUrl || !apiToken) return null;
+    return {
+      apiUrl,
+      apiToken,
+      displayName: typeof raw.displayName === 'string' ? raw.displayName.trim() : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeDelegateCliConfig(config: DelegateCliConfig): void {
+  mkdirSync(join(homedir(), '.clawket'), { recursive: true });
+  writeFileSync(DELEGATE_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf8');
+}
+
+async function handleDelegateCommand(args: string[], jsonOutput: boolean): Promise<void> {
+  const subcommand = args[0] ?? 'help';
+
+  if (subcommand === 'pair' || subcommand === 'connect') {
+    await handleDelegateLocalPairCommand(args.slice(1), jsonOutput);
+    return;
+  }
+
+  if (subcommand === 'status') {
+    const config = readDelegateCliConfig();
+    if (!config) {
+      if (jsonOutput) {
+        printJson({ ok: false, connected: false, error: 'No Delegate config found' });
+      } else {
+        console.log('Delegate is not configured. Run: clawket delegate pair');
+      }
+      return;
+    }
+    const result = await testDelegateConnection(config.apiUrl, config.apiToken);
+    if (jsonOutput) {
+      printJson({ ok: result.ok, connected: result.ok, apiUrl: config.apiUrl, error: result.error ?? null });
+    } else {
+      if (result.ok) {
+        console.log(`✓ Delegate connected: ${config.apiUrl}`);
+      } else {
+        console.log(`✗ Delegate unreachable: ${result.error}`);
+      }
+    }
+    return;
+  }
+
+  if (subcommand === 'reset') {
+    if (existsSync(DELEGATE_CONFIG_PATH)) {
+      rmSync(DELEGATE_CONFIG_PATH, { force: true });
+      console.log(`Cleared Delegate config: ${DELEGATE_CONFIG_PATH}`);
+    } else {
+      console.log('No Delegate config to clear.');
+    }
+    return;
+  }
+
+  // Help
+  console.log(`
+clawket delegate <command>
+
+Commands:
+  pair       Connect to a Delegate instance (generates QR for mobile)
+  connect    Alias for pair
+  status     Check Delegate connection health
+  reset      Clear Delegate configuration
+
+Options:
+  --api-url <url>       Delegate API URL (default: https://delegate.ws)
+  --api-token <token>   Delegate API token (DELEGATE_API_TOKEN env var)
+  --name <name>         Display name for this bridge
+  --json                Output JSON
+`);
+}
+
+async function handleDelegateLocalPairCommand(args: string[], jsonOutput: boolean): Promise<void> {
+  const result = await performDelegateLocalPairing(args);
+
+  if (jsonOutput) {
+    printJson({
+      ok: true,
+      backend: 'delegate',
+      transport: 'local',
+      ...result.jsonValue,
+    });
+  } else {
+    console.log(`\n${result.label}\n`);
+    for (const line of result.summaryLines) {
+      console.log(line);
+    }
+    console.log('\nScan this QR code in the Clawket app:\n');
+    qrcodeTerminal.generate(result.qrPayload, { small: true });
+  }
+}
+
+async function performDelegateLocalPairing(args: string[]): Promise<PairSuccessResult> {
+  const apiUrl = readFlag(args, '--api-url')
+    ?? process.env.DELEGATE_API_URL?.trim()
+    ?? readDelegateCliConfig()?.apiUrl
+    ?? 'https://delegate.ws';
+
+  const apiToken = readFlag(args, '--api-token')
+    ?? process.env.DELEGATE_API_TOKEN?.trim()
+    ?? readDelegateCliConfig()?.apiToken;
+
+  if (!apiToken) {
+    throw new Error(
+      'Delegate API token is required. Pass --api-token <token>, set DELEGATE_API_TOKEN env var, ' +
+      'or run `clawket delegate pair --api-url https://your-delegate.example.com --api-token <token>` first.',
+    );
+  }
+
+  const displayName = readFlag(args, '--name')
+    ?? readDelegateCliConfig()?.displayName
+    ?? getDefaultBridgeDisplayName();
+
+  // Test connectivity
+  const testResult = await testDelegateConnection(apiUrl, apiToken);
+  if (!testResult.ok) {
+    throw new Error(`Cannot connect to Delegate at ${apiUrl}: ${testResult.error}`);
+  }
+
+  // Save config for future use
+  writeDelegateCliConfig({ apiUrl, apiToken, displayName });
+
+  // Build QR payload — Delegate uses a direct connection model (no relay needed).
+  // The mobile app connects to the bridge WebSocket, which proxies to Delegate's HTTP API.
+  const qrPayload = buildDelegateLocalPairingQrPayload({
+    bridgeWsUrl: `ws://127.0.0.1:18789`,
+    apiUrl,
+    apiToken,
+    displayName,
+  });
+
+  const qrFile = readFlag(args, '--qr-file');
+  const qrImagePath = await writeRawQrPng(qrPayload, 'clawket-delegate-pair', qrFile);
+
+  return {
+    backend: 'delegate',
+    transport: 'local',
+    label: `Delegate (${apiUrl})`,
+    qrPayload,
+    qrImagePath,
+    summaryLines: [
+      `API URL:      ${apiUrl}`,
+      `Display Name: ${displayName}`,
+      `QR Image:     ${qrImagePath}`,
+      `Connection:   verified`,
+    ],
+    jsonValue: {
+      apiUrl,
+      displayName,
+      qrImagePath,
+      connectionVerified: true,
+    },
+  };
 }
 
 main().catch((error) => {

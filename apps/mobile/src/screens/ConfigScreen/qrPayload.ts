@@ -13,6 +13,11 @@ export type QRScanResult = {
     bridgeUrl: string;
     displayName?: string;
   };
+  delegate?: {
+    apiUrl: string;
+    apiToken: string;
+    displayName?: string;
+  };
   relay?: {
     serverUrl: string;
     gatewayId: string;
@@ -35,7 +40,7 @@ export type QRScanResult = {
 export function parseQRPayload(raw: string): QRScanResult | null {
   const trimmed = raw.trim();
   const normalizeMode = (value: unknown): GatewayMode | undefined => (
-    value === 'local' || value === 'tailscale' || value === 'cloudflare' || value === 'custom' || value === 'relay' || value === 'hermes'
+    value === 'local' || value === 'tailscale' || value === 'cloudflare' || value === 'custom' || value === 'relay' || value === 'hermes' || value === 'delegate'
       ? value
       : undefined
   );
@@ -81,7 +86,48 @@ export function parseQRPayload(raw: string): QRScanResult | null {
     const isLegacy = payload.kind === 'clawket_pair' && payload.version === 1;
     const isHermesLocal = payload.kind === 'clawket_hermes_local' && payload.version === 1;
     const isHermesRelay = payload.kind === 'clawket_hermes_pair' && payload.version === 1;
-    if (!isCompact && !isLegacy && !isHermesLocal && !isHermesRelay) return null;
+    const isDelegateLocal = payload.kind === 'clawket_delegate_local' && payload.version === 1;
+    const isDelegateRelay = payload.kind === 'clawket_delegate_pair' && payload.version === 1;
+    if (!isCompact && !isLegacy && !isHermesLocal && !isHermesRelay && !isDelegateLocal && !isDelegateRelay) return null;
+    if (isDelegateLocal) {
+      const bridgeUrl = typeof payload.url === 'string' ? payload.url.trim() : '';
+      const delegateObj = payload.delegate as Record<string, unknown> | undefined;
+      const apiUrl = typeof delegateObj?.apiUrl === 'string' ? delegateObj.apiUrl.trim() : '';
+      const apiToken = typeof delegateObj?.apiToken === 'string' ? delegateObj.apiToken.trim() : '';
+      if (!bridgeUrl || !apiUrl || !apiToken) return null;
+      return {
+        url: bridgeUrl,
+        backendKind: 'delegate' as const,
+        transportKind: 'local' as const,
+        mode: 'delegate' as const,
+        delegate: {
+          apiUrl,
+          apiToken,
+          displayName: typeof delegateObj?.displayName === 'string' ? delegateObj.displayName.trim() : undefined,
+        },
+      };
+    }
+    if (isDelegateRelay) {
+      const serverUrl = typeof payload.server === 'string' ? payload.server.trim() : '';
+      const bridgeId = typeof payload.bridgeId === 'string' ? payload.bridgeId.trim() : '';
+      const accessCode = typeof payload.accessCode === 'string' ? payload.accessCode.trim() : '';
+      const relayUrl = typeof payload.relayUrl === 'string' ? payload.relayUrl.trim() : '';
+      const displayName = typeof payload.displayName === 'string' ? payload.displayName.trim() : undefined;
+      if (!serverUrl || !bridgeId || !accessCode) return null;
+      return {
+        url: relayUrl,
+        backendKind: 'delegate' as const,
+        transportKind: 'relay' as const,
+        mode: 'delegate' as const,
+        relay: {
+          serverUrl,
+          gatewayId: bridgeId,
+          accessCode,
+          relayUrl: relayUrl || undefined,
+          displayName,
+        },
+      };
+    }
     if (isHermesLocal) {
       const bridgeUrl = typeof payload.url === 'string' ? payload.url.trim() : '';
       const hermes = readHermes(payload.hermes);
@@ -195,7 +241,7 @@ export function parseQRPayload(raw: string): QRScanResult | null {
         return {
           url: String(obj.url),
           ...(hermes ? { backendKind: 'hermes' as const } : {}),
-          ...(mode && mode !== 'hermes' ? { transportKind: mode } : {}),
+          ...(mode && mode !== 'hermes' && mode !== 'delegate' ? { transportKind: mode } : {}),
           ...(typeof obj.token === 'string' ? { token: obj.token } : {}),
           ...(typeof obj.password === 'string' ? { password: obj.password } : {}),
           mode,
@@ -223,7 +269,7 @@ export function parseQRPayload(raw: string): QRScanResult | null {
         return {
           url: `${scheme}://${obj.host}:${port}`,
           ...(hermes ? { backendKind: 'hermes' as const } : {}),
-          ...(mode && mode !== 'hermes' ? { transportKind: mode } : {}),
+          ...(mode && mode !== 'hermes' && mode !== 'delegate' ? { transportKind: mode } : {}),
           ...(typeof obj.token === 'string' ? { token: obj.token } : {}),
           ...(typeof obj.password === 'string' ? { password: obj.password } : {}),
           mode,

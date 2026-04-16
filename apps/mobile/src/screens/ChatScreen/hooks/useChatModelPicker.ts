@@ -47,7 +47,7 @@ type Props = {
       scope?: 'global' | 'session';
       sessionKey?: string | null;
     }) => Promise<ModelSelectionState>;
-    getBackendKind: () => 'openclaw' | 'hermes';
+    getBackendKind: () => 'openclaw' | 'hermes' | 'delegate';
   };
   sessionKey: string | null;
   setInput: (value: string) => void;

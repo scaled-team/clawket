@@ -8,7 +8,7 @@ import type {
 import { THINKING_LEVELS } from '../utils/gateway-settings';
 import type { ThinkingLevel } from '../utils/gateway-settings';
 
-type GatewayLike = Pick<GatewayConfig, 'backendKind' | 'transportKind' | 'mode' | 'relay' | 'hermes'>;
+type GatewayLike = Pick<GatewayConfig, 'backendKind' | 'transportKind' | 'mode' | 'relay' | 'hermes' | 'delegate'>;
 
 export type GatewayBackendCapabilities = {
   chatAbort: boolean;
@@ -96,6 +96,32 @@ const HERMES_CAPABILITIES: GatewayBackendCapabilities = {
   openClawConfigScreens: false,
 };
 
+const DELEGATE_CAPABILITIES: GatewayBackendCapabilities = {
+  chatAbort: false,
+  chatAttachments: false,
+  consoleDiscover: false,
+  consoleClawHub: false,
+  modelCatalog: false,
+  modelSelection: false,
+  configRead: false,
+  configWrite: false,
+  consoleChannels: false,
+  consoleCron: false,
+  consoleCronCreate: false,
+  consoleSkills: false,
+  consoleUsage: false,
+  consoleCost: false,
+  consoleTools: false,
+  consoleNodes: false,
+  consoleFiles: false,
+  consoleLogs: false,
+  consoleAgentList: true,
+  consoleAgentDetail: false,
+  consoleAgentSessionsBoard: false,
+  consoleHeartbeat: false,
+  openClawConfigScreens: false,
+};
+
 const BACKENDS: Record<GatewayBackendKind, GatewayBackendDescriptor> = {
   openclaw: {
     kind: 'openclaw',
@@ -106,6 +132,11 @@ const BACKENDS: Record<GatewayBackendKind, GatewayBackendDescriptor> = {
     kind: 'hermes',
     label: 'Hermes',
     capabilities: HERMES_CAPABILITIES,
+  },
+  delegate: {
+    kind: 'delegate',
+    label: 'Delegate',
+    capabilities: DELEGATE_CAPABILITIES,
   },
 };
 
@@ -120,12 +151,13 @@ export function isGatewayTransportKind(value: unknown): value is GatewayTranspor
 }
 
 export function isGatewayBackendKind(value: unknown): value is GatewayBackendKind {
-  return value === 'openclaw' || value === 'hermes';
+  return value === 'openclaw' || value === 'hermes' || value === 'delegate';
 }
 
 export function resolveGatewayBackendKind(value: GatewayLike | null | undefined): GatewayBackendKind {
   if (isGatewayBackendKind(value?.backendKind)) return value.backendKind;
   if (value?.mode === 'hermes' || value?.hermes) return 'hermes';
+  if (value?.mode === 'delegate' || (value as any)?.delegate) return 'delegate';
   return 'openclaw';
 }
 
@@ -141,6 +173,7 @@ export function toLegacyGatewayMode(value: {
   transportKind?: GatewayTransportKind;
 }): GatewayMode {
   if (value.backendKind === 'hermes') return 'hermes';
+  if (value.backendKind === 'delegate') return 'delegate';
   return value.transportKind ?? 'custom';
 }
 
@@ -159,6 +192,7 @@ export function getGatewayThinkingLevels(
   return selectByBackend<ThinkingLevel[]>(input, {
     openclaw: [...THINKING_LEVELS],
     hermes: [...HERMES_THINKING_LEVELS],
+    delegate: ['off'],
   });
 }
 
@@ -177,12 +211,14 @@ export function getGatewayThinkingLevels(
  */
 export function selectByBackend<T>(
   input: GatewayLike | GatewayBackendKind | null | undefined,
-  options: { openclaw: T; hermes: T },
+  options: { openclaw: T; hermes: T; delegate?: T },
 ): T {
   const kind = typeof input === 'string' && isGatewayBackendKind(input)
     ? input
     : resolveGatewayBackendKind(input as GatewayLike | null | undefined);
-  return kind === 'hermes' ? options.hermes : options.openclaw;
+  if (kind === 'hermes') return options.hermes;
+  if (kind === 'delegate') return options.delegate ?? options.openclaw;
+  return options.openclaw;
 }
 
 /**
@@ -202,6 +238,7 @@ export function resolveGlobalMainSessionKey(
   return selectByBackend<string | null>(input, {
     openclaw: null,
     hermes: 'main',
+    delegate: 'main',
   });
 }
 
@@ -209,6 +246,7 @@ export function getGatewayModeLabel(input: GatewayLike): string {
   const backendKind = resolveGatewayBackendKind(input);
   const transportKind = resolveGatewayTransportKind(input);
   if (backendKind === 'hermes') return 'Hermes';
+  if (backendKind === 'delegate') return 'Delegate';
   switch (transportKind) {
     case 'relay':
       return 'Remote';
@@ -232,11 +270,13 @@ export function buildGatewayDefaultName(input: {
   const backendKind = input.backendKind ?? 'openclaw';
   const transportKind = input.transportKind ?? 'custom';
   const host = parseHost(input.url);
-  const baseLabel = backendKind === 'hermes'
-    ? 'Hermes'
-    : transportKind === 'relay'
-      ? 'Relay'
-      : 'Custom';
+  const baseLabel = backendKind === 'delegate'
+    ? 'Delegate'
+    : backendKind === 'hermes'
+      ? 'Hermes'
+      : transportKind === 'relay'
+        ? 'Relay'
+        : 'Custom';
   if (host) return `${baseLabel} (${host})`;
   return `${baseLabel} Gateway ${input.index}`;
 }

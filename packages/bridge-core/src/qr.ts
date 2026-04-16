@@ -48,7 +48,32 @@ export interface HermesRelayPairingQrPayloadV1 {
   displayName?: string | null;
 }
 
-export type PairingQrPayload = PairingQrPayloadV2 | LegacyPairingQrPayloadV1 | HermesLocalPairingQrPayloadV1 | HermesRelayPairingQrPayloadV1;
+export interface DelegateLocalPairingQrPayloadV1 {
+  version: 1;
+  kind: 'clawket_delegate_local';
+  mode: 'delegate';
+  url: string;
+  expiresAt: number;
+  delegate: {
+    apiUrl: string;
+    apiToken: string;
+    displayName?: string;
+  };
+}
+
+export interface DelegateRelayPairingQrPayloadV1 {
+  version: 1;
+  kind: 'clawket_delegate_pair';
+  backend: 'delegate';
+  transport: 'relay';
+  server: string;
+  bridgeId: string;
+  accessCode: string;
+  relayUrl?: string;
+  displayName?: string | null;
+}
+
+export type PairingQrPayload = PairingQrPayloadV2 | LegacyPairingQrPayloadV1 | HermesLocalPairingQrPayloadV1 | HermesRelayPairingQrPayloadV1 | DelegateLocalPairingQrPayloadV1 | DelegateRelayPairingQrPayloadV1;
 
 export interface GatewayQrPayloadV2 {
   url: string;
@@ -150,6 +175,55 @@ export function buildHermesRelayPairingQrPayload(input: {
     version: 1,
     kind: 'clawket_hermes_pair',
     backend: 'hermes',
+    transport: 'relay',
+    server: input.server.trim(),
+    bridgeId: input.bridgeId.trim(),
+    accessCode: input.accessCode.trim(),
+  };
+  if (input.displayName?.trim()) {
+    payload.displayName = input.displayName.trim();
+  }
+  if (input.relayUrl?.trim()) {
+    payload.relayUrl = input.relayUrl.trim();
+  }
+  return JSON.stringify(payload);
+}
+
+export function buildDelegateLocalPairingQrPayload(input: {
+  bridgeWsUrl: string;
+  apiUrl: string;
+  apiToken: string;
+  displayName?: string | null;
+  expiresAt?: number;
+}): string {
+  const payload: DelegateLocalPairingQrPayloadV1 = {
+    version: 1,
+    kind: 'clawket_delegate_local',
+    mode: 'delegate',
+    url: input.bridgeWsUrl.trim(),
+    expiresAt: input.expiresAt ?? Date.now() + 10 * 60 * 1000,
+    delegate: {
+      apiUrl: input.apiUrl.trim(),
+      apiToken: input.apiToken.trim(),
+    },
+  };
+  if (input.displayName?.trim()) {
+    payload.delegate.displayName = input.displayName.trim();
+  }
+  return JSON.stringify(payload);
+}
+
+export function buildDelegateRelayPairingQrPayload(input: {
+  server: string;
+  bridgeId: string;
+  accessCode: string;
+  displayName?: string | null;
+  relayUrl?: string | null;
+}): string {
+  const payload: DelegateRelayPairingQrPayloadV1 = {
+    version: 1,
+    kind: 'clawket_delegate_pair',
+    backend: 'delegate',
     transport: 'relay',
     server: input.server.trim(),
     bridgeId: input.bridgeId.trim(),

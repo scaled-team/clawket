@@ -25,7 +25,7 @@ type Props = {
 
 function buildAgentPreview(
   agentId: string,
-  backendKind: 'openclaw' | 'hermes',
+  backendKind: 'openclaw' | 'hermes' | 'delegate',
   identity?: {
     agentName?: string;
     agentEmoji?: string;
