@@ -16,6 +16,7 @@ import { readAgentAvatar } from '../../services/agent-avatar';
 import { buildConsoleLibraryEntryDescriptors } from '../../services/console-entry-descriptors';
 import { loadGatewayConsoleDashboardBundle } from '../../services/gateway-console-dashboard';
 import { resolveGatewayBackendKind, selectByBackend } from '../../services/gateway-backends';
+import { fetchDelegateDashboard } from '../../services/delegate-dashboard';
 import { StorageService } from '../../services/storage';
 import { resolveDashboardCostDisplay } from '../../services/usage-cost-display';
 import { getDisplayAgentEmoji } from '../../utils/agent-emoji';
@@ -324,6 +325,69 @@ function useDashboardData() {
 
     try {
       if (!hadVisibleData) setLoading(true);
+
+      // ── Delegate backend: fetch from the dedicated dashboard endpoint ──
+      if (config?.backendKind === 'delegate' && config?.delegate) {
+        const dashData = await fetchDelegateDashboard({
+          apiUrl: config.delegate.apiUrl,
+          apiToken: config.delegate.apiToken,
+        });
+        if (dashData) {
+          const lastHeartbeat = (() => {
+            if (!dashData.heartbeat.lastSeen) return null;
+            const mins = Math.floor((Date.now() - new Date(dashData.heartbeat.lastSeen).getTime()) / 60_000);
+            const formatted = formatConsoleHeartbeatAge(mins, i18n.resolvedLanguage ?? i18n.language ?? 'en');
+            if (formatted.compactText) return formatted.compactText;
+            if (formatted.count == null) return t(formatted.key);
+            return t(formatted.key, { count: formatted.count });
+          })();
+          const nextData: DashboardData = {
+            agentName: 'Delegate Agent',
+            agentEmoji: '🎯',
+            agents: dashData.stats.totalAgents,
+            sessions: dashData.stats.totalDelegations,
+            messages: dashData.messages.total,
+            lastHeartbeat,
+            cost: null,
+            costDisplayLabel: null,
+            costBadge: null,
+            tokens: null,
+            channels: null,
+            cronTotal: null,
+            cronFailed: null,
+            skills: null,
+            tools: null,
+            models: null,
+            files: null,
+            userMessages: null,
+            toolCalls: null,
+            nodes: null,
+            nodeSummary: null,
+            nodeCounts: null,
+            pendingPairCount: null,
+            devices: null,
+            configDefaultModel: null,
+            configHeartbeat: null,
+            configActiveHours: null,
+          };
+          setData(nextData);
+          const savedAt = Date.now();
+          setLastUpdatedAt(savedAt);
+          setHydratedFromCache(false);
+          if (cacheScope) {
+            void StorageService.setDashboardCache(cacheScope, {
+              version: 2,
+              cacheKey: cacheScope,
+              savedAt,
+              source: 'network',
+              connectionStateAtSave: gateway.getConnectionState(),
+              data: nextData,
+            });
+          }
+        }
+        return;
+      }
+
       const today = getTodayDateStr();
       const [ackedIds, settledResults] = await Promise.all([
         StorageService.getAckedCronFailures(),
