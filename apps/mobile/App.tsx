@@ -157,6 +157,7 @@ export default function App(): React.JSX.Element {
       customAccent={customAccent}
       onModeChange={setThemeMode}
       onAccentChange={setAccentId}
+      getDelegateConnection={() => gateway.getDelegateConfig()}
     >
       <ProPaywallProvider>
         <AppContent
@@ -1095,6 +1096,7 @@ function AppContent({
                     lazy: backendKind === 'delegate',
                     tabBarLabel: t('Chat'),
                     tabBarBadge: hasUnreadChat ? '' : undefined,
+                    tabBarButtonTestID: 'tab-Chat',
                     ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'message.fill' : 'message' }),
                     } : {}),
@@ -1105,6 +1107,7 @@ function AppContent({
                   component={OfficeTab}
                   options={{
                     tabBarLabel: t('Office'),
+                    tabBarButtonTestID: 'tab-Office',
                     ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'building.2.fill' : 'building.2' }),
                     } : {}),
@@ -1115,6 +1118,7 @@ function AppContent({
                   component={ConsoleTab}
                   options={{
                     tabBarLabel: t('Console'),
+                    tabBarButtonTestID: 'tab-Console',
                     ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'terminal.fill' : 'terminal' }),
                     } : {}),
@@ -1125,6 +1129,7 @@ function AppContent({
                   component={ConfigTab}
                   options={{
                     tabBarLabel: t('Setting'),
+                    tabBarButtonTestID: 'tab-Config',
                     ...(useNativeIOSTabs ? {
                       tabBarIcon: ({ focused }: { focused: boolean }) => ({ sfSymbol: focused ? 'gearshape.fill' : 'gearshape' }),
                     } : {}),

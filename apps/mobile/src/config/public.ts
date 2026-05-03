@@ -20,7 +20,8 @@ type PublicEnv = Partial<Record<
   | 'EXPO_PUBLIC_REVENUECAT_PRO_ENTITLEMENT_ID'
   | 'EXPO_PUBLIC_REVENUECAT_PRO_OFFERING_ID'
   | 'EXPO_PUBLIC_REVENUECAT_PRO_PACKAGE_ID'
-  | 'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY',
+  | 'EXPO_PUBLIC_REVENUECAT_TEST_API_KEY'
+  | 'EXPO_PUBLIC_SUPABASE_URL',
   string | undefined
 >> & Partial<NodeJS.ProcessEnv>;
 
@@ -43,6 +44,7 @@ const STATIC_PUBLIC_ENV: PublicEnv = {
   EXPO_PUBLIC_REVENUECAT_PRO_OFFERING_ID: process.env.EXPO_PUBLIC_REVENUECAT_PRO_OFFERING_ID,
   EXPO_PUBLIC_REVENUECAT_PRO_PACKAGE_ID: process.env.EXPO_PUBLIC_REVENUECAT_PRO_PACKAGE_ID,
   EXPO_PUBLIC_REVENUECAT_TEST_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY,
+  EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
 };
 
 function parseBooleanEnv(value: string | undefined | null): boolean | null {
@@ -152,6 +154,16 @@ export function buildSupportEmailUrl(email: string | null): string | null {
   return `mailto:${email}`;
 }
 
+/**
+ * Resolves the Supabase project URL used for DelegateLiveEvents Realtime
+ * subscriptions. Returns null when not configured — Delegate live events stay
+ * inert in that case (handlers can still register, just receive no events).
+ */
+export function resolvePublicSupabaseUrl(env: PublicEnv = STATIC_PUBLIC_ENV): string | null {
+  return readOptionalEnv('EXPO_PUBLIC_SUPABASE_URL', env);
+}
+
 export const publicAppLinks = resolvePublicAppLinks();
 export const publicAnalyticsConfig = resolvePublicAnalyticsConfig();
 export const publicRevenueCatConfig = resolvePublicRevenueCatConfig();
+export const publicSupabaseUrl = resolvePublicSupabaseUrl();
