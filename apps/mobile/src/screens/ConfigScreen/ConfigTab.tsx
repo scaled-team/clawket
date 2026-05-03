@@ -10,6 +10,7 @@ import { OpenClawReleasesScreen } from './OpenClawReleasesScreen';
 import { GatewayConfigViewerScreen } from './GatewayConfigViewerScreen';
 import { GatewayConfigBackupsScreen } from './GatewayConfigBackupsScreen';
 import { ReleaseNotesHistoryScreen } from './ReleaseNotesHistoryScreen';
+import { DelegatePushDevicesScreen } from './DelegatePushDevicesScreen';
 import { OpenClawConfigScreen } from './OpenClawConfigScreen';
 import { OpenClawDiagnosticsScreen } from './OpenClawDiagnosticsScreen';
 import { OpenClawPermissionRepairScreen } from './OpenClawPermissionRepairScreen';
@@ -40,6 +41,7 @@ export type ConfigStackParamList = {
   OpenClawPermissions: undefined;
   GatewayConfigViewer: undefined;
   GatewayConfigBackups: undefined;
+  DelegatePushDevices: undefined;
 };
 
 const ConfigStack = createNativeStackNavigator<ConfigStackParamList>();
@@ -99,6 +101,7 @@ export function ConfigTab(): React.JSX.Element {
       <ConfigStack.Screen name="OpenClawPermissions" component={OpenClawPermissionsScreen} options={modalScreenOptions} />
       <ConfigStack.Screen name="GatewayConfigViewer" component={GatewayConfigViewerScreen} options={modalScreenOptions} />
       <ConfigStack.Screen name="GatewayConfigBackups" component={GatewayConfigBackupsScreen} options={modalScreenOptions} />
+      <ConfigStack.Screen name="DelegatePushDevices" component={DelegatePushDevicesScreen} options={modalScreenOptions} />
     </ConfigStack.Navigator>
   );
 }

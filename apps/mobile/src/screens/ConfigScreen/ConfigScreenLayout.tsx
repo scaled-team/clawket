@@ -22,7 +22,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import { EdgeInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AppWindow, ChevronLeft, ChevronRight, Cloud, Eye, Gamepad2, Github, HelpCircle, Mic, Palette, Share2, ShieldCheck, Link2, Mail, MessageCircleMore, Minus, Plus, ScanLine, Sparkles, Star, ImageUp } from 'lucide-react-native';
+import { AppWindow, Bell, ChevronLeft, ChevronRight, Cloud, Eye, Gamepad2, Github, HelpCircle, Mic, Palette, Share2, ShieldCheck, Link2, Mail, MessageCircleMore, Minus, Plus, ScanLine, Sparkles, Star, ImageUp } from 'lucide-react-native';
 import { ConnectionHelpQuick, ConnectionHelpManual } from '../../components/config/ConnectionHelpSection';
 import { SwipeableGatewayRow, SwipeableMethods } from '../../components/config/SwipeableGatewayRow';
 import { IconButton, ModalSheet, SegmentedTabs, ThemedSwitch } from '../../components/ui';
@@ -648,6 +648,7 @@ export function ConfigScreenLayout({ insets, tabBarHeight, controller }: Props):
 
             <View style={styles.card}>
               <Pressable
+                testID="config-row-OpenClawConfig"
                 onPress={() => configNavigation.navigate('OpenClawConfig')}
                 style={({ pressed }) => [styles.row, styles.feedbackRow, pressed && styles.rowPressed]}
               >
@@ -656,6 +657,28 @@ export function ConfigScreenLayout({ insets, tabBarHeight, controller }: Props):
                 </RowIcon>
                 <View style={styles.supportRowText}>
                   <Text style={styles.rowLabel}>{t('OPENCLAW CONFIG')}</Text>
+                </View>
+                <ChevronRight size={16} color={theme.colors.textSubtle} strokeWidth={2} />
+              </Pressable>
+            </View>
+          </>
+        ) : null}
+
+        {activeBackendCapabilities.pushNotifications ? (
+          <>
+            <Text style={styles.sectionHeader}>{t('DELEGATE PUSH')}</Text>
+
+            <View style={styles.card}>
+              <Pressable
+                testID="config-row-DelegatePushDevices"
+                onPress={() => configNavigation.navigate('DelegatePushDevices')}
+                style={({ pressed }) => [styles.row, styles.feedbackRow, pressed && styles.rowPressed]}
+              >
+                <RowIcon backgroundColor="#E8F5E9" styles={styles}>
+                  <Bell size={17} strokeWidth={2.2} color="#2E7D32" />
+                </RowIcon>
+                <View style={styles.supportRowText}>
+                  <Text style={styles.rowLabel}>{t('Push Devices')}</Text>
                 </View>
                 <ChevronRight size={16} color={theme.colors.textSubtle} strokeWidth={2} />
               </Pressable>
@@ -701,6 +724,7 @@ export function ConfigScreenLayout({ insets, tabBarHeight, controller }: Props):
           <View style={styles.divider} />
 
           <Pressable
+            testID="config-row-ChatAppearance"
             onPress={() => configNavigation.navigate('ChatAppearance')}
             style={({ pressed }) => [styles.row, styles.feedbackRow, pressed && styles.rowPressed]}
           >
@@ -919,6 +943,7 @@ export function ConfigScreenLayout({ insets, tabBarHeight, controller }: Props):
         <Text style={styles.sectionHeader}>{t('HELP')}</Text>
         <View style={styles.card}>
           <Pressable
+            testID="config-row-HelpCenter"
             onPress={() => configNavigation.navigate('HelpCenter')}
             style={({ pressed }) => [styles.row, styles.feedbackRow, pressed && styles.rowPressed]}
           >
@@ -934,6 +959,7 @@ export function ConfigScreenLayout({ insets, tabBarHeight, controller }: Props):
           <View style={styles.divider} />
 
           <Pressable
+            testID="config-row-ReleaseNotesHistory"
             onPress={handleReleaseNotesEntryPress}
             style={({ pressed }) => [styles.row, styles.feedbackRow, pressed && styles.rowPressed]}
           >
@@ -1208,6 +1234,7 @@ export function ConfigScreenLayout({ insets, tabBarHeight, controller }: Props):
           ) : null}
           {controller.gatewayUpdateInfo ? (
             <Pressable
+              testID="config-row-OpenClawReleases"
               onPress={() => configNavigation.navigate('OpenClawReleases')}
               style={({ pressed }) => [styles.footerUpdateLink, pressed && styles.footerUpdateLinkPressed]}
             >
