@@ -212,4 +212,91 @@ describe('console-screen-support', () => {
       isConsoleScreenSupported('AdminSessions', { ...baseCaps, consoleAdminSessions: false }),
     ).toBe(false);
   });
+
+  it('Phase 1b: all Delegate-only surfaces are supported under DELEGATE_CAPABILITIES', () => {
+    // Mirrors the DELEGATE_CAPABILITIES object from gateway-backends.ts so the
+    // test is self-contained and does not import the live constant (which would
+    // make it a snapshot of the file rather than an explicit contract check).
+    const delegateCaps: GatewayBackendCapabilities = {
+      chatAbort: false,
+      chatAttachments: false,
+      consoleDiscover: false,
+      consoleClawHub: false,
+      modelCatalog: false,
+      modelSelection: false,
+      configRead: false,
+      configWrite: false,
+      consoleChannels: true,
+      consoleCron: true,
+      consoleCronCreate: false,
+      consoleSkills: true,
+      consoleUsage: true,
+      consoleCost: true,
+      consoleTools: true,
+      consoleNodes: false,
+      consoleFiles: false,
+      consoleLogs: false,
+      consoleAgentList: true,
+      consoleAgentDetail: true,
+      consoleAgentSessionsBoard: true,
+      consoleHeartbeat: true,
+      consoleTasks: true,
+      consoleCreateTask: true,
+      consoleBoardMeetings: true,
+      consoleCreateBoardMeeting: true,
+      consoleNotifications: true,
+      consoleAdmin: true,
+      consoleAdminUsers: true,
+      consoleAdminWorkspaces: true,
+      consoleAdminBilling: true,
+      consoleAdminAudit: true,
+      consoleAdminSessions: true,
+      consoleSkillsView: true,
+      consoleAdminLogs: true,
+      consoleAdminScheduledTasks: true,
+      consoleAdminContainerTelemetry: true,
+      pushNotifications: true,
+      realtimeForeground: true,
+      officeGameDelegate: true,
+      openClawConfigScreens: false,
+    };
+
+    // Tasks surface.
+    expect(isConsoleScreenSupported('TaskList', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('TaskDetail', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('CreateTask', delegateCaps)).toBe(true);
+
+    // Cron surface (view-only; create disabled because consoleCronCreate=false).
+    expect(isConsoleScreenSupported('CronList', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('CronDetail', delegateCaps)).toBe(true);
+
+    // Notifications surface.
+    expect(isConsoleScreenSupported('Notifications', delegateCaps)).toBe(true);
+
+    // Agents surface.
+    expect(isConsoleScreenSupported('AgentList', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('AgentDetail', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('CreateAgent', delegateCaps)).toBe(true);
+
+    // Board meetings surface.
+    expect(isConsoleScreenSupported('BoardMeetings', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('BoardMeetingDetail', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('CreateBoardMeeting', delegateCaps)).toBe(true);
+
+    // Admin surface.
+    expect(isConsoleScreenSupported('AdminMenu', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('AdminUsers', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('AdminWorkspaces', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('AdminBilling', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('AdminAudit', delegateCaps)).toBe(true);
+    expect(isConsoleScreenSupported('AdminSessions', delegateCaps)).toBe(true);
+
+    // Surfaces that are intentionally off for Delegate.
+    expect(isConsoleScreenSupported('Discover', delegateCaps)).toBe(false);
+    expect(isConsoleScreenSupported('ClawHub', delegateCaps)).toBe(false);
+    expect(isConsoleScreenSupported('ModelList', delegateCaps)).toBe(false);
+    expect(isConsoleScreenSupported('Nodes', delegateCaps)).toBe(false);
+    expect(isConsoleScreenSupported('FileList', delegateCaps)).toBe(false);
+    expect(isConsoleScreenSupported('Logs', delegateCaps)).toBe(false);
+  });
 });

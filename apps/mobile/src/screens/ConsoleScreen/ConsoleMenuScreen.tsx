@@ -930,6 +930,54 @@ function OpenClawConsoleMenuScreen(): React.JSX.Element {
     () => {
       const items: ConsoleMenuListItem[] = [
       {
+        key: 'taskList',
+        screen: 'TaskList',
+        source: 'list_tasks',
+        emoji: '📋',
+        title: t('Tasks'),
+        description: t('Browse, delegate, and update tasks'),
+      },
+      {
+        key: 'createTask',
+        screen: 'CreateTask',
+        source: 'list_create_task',
+        emoji: '➕',
+        title: t('Create task'),
+        description: t('Draft a new task with AI enhancement'),
+      },
+      {
+        key: 'skillList',
+        screen: 'SkillList',
+        source: 'list_skills',
+        emoji: '⚡',
+        title: t('Skills'),
+        description: t('Browse installed agent skills'),
+      },
+      {
+        key: 'boardMeetings',
+        screen: 'BoardMeetings',
+        source: 'list_board_meetings',
+        emoji: '🏛️',
+        title: t('Board Meetings'),
+        description: t('Multi-agent discussions and decisions'),
+      },
+      {
+        key: 'notifications',
+        screen: 'Notifications',
+        source: 'list_notifications',
+        emoji: '🔔',
+        title: t('Notifications'),
+        description: t('Delivery prefs and recent logs'),
+      },
+      {
+        key: 'adminMenu',
+        screen: 'AdminMenu',
+        source: 'list_admin',
+        emoji: '🛡️',
+        title: t('Admin'),
+        description: t('Users, workspaces, billing, audit, sessions'),
+      },
+      {
         key: 'agentSessionsBoard',
         screen: 'AgentSessionsBoard',
         source: 'list_agent_sessions_board',
@@ -1078,6 +1126,7 @@ function OpenClawConsoleMenuScreen(): React.JSX.Element {
           {listItems.map((item) => (
             <TouchableOpacity
               key={item.key}
+              testID={`console-menu-item-${item.screen}`}
               style={[
                 styles.listItem,
                 { borderColor: colors.border },
@@ -1105,14 +1154,23 @@ function OpenClawConsoleMenuScreen(): React.JSX.Element {
 // spread `if (backend === 'hermes')` across screen files (see Backend
 // Architecture Rule #3 in apps/mobile/CLAUDE.md). For OpenClaw configs this
 // resolves to `OpenClawConsoleMenuScreen`, preserving the existing render
-// path exactly.
+// path exactly. Delegate also uses `OpenClawConsoleMenuScreen` — that screen
+// handles the delegate dashboard path internally and capability-gates every
+// list item through `isConsoleScreenSupported`, so Tasks / Cron /
+// Notifications / Agents / Board meetings / Admin all appear automatically
+// once their capability flags are `true` in DELEGATE_CAPABILITIES.
 export function ConsoleMenuScreen(): React.JSX.Element {
   const { config } = useAppContext();
   const Component = selectByBackend(config, {
     openclaw: OpenClawConsoleMenuScreen,
     hermes: HermesConsoleMenuScreen,
+    delegate: OpenClawConsoleMenuScreen,
   });
-  return <Component />;
+  return (
+    <View testID="tab-Console-body" style={{ flex: 1 }}>
+      <Component />
+    </View>
+  );
 }
 
 // ---- Styles ----
