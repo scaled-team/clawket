@@ -35,6 +35,39 @@ export type GatewayBackendCapabilities = {
   consoleAgentDetail: boolean;
   consoleAgentSessionsBoard: boolean;
   consoleHeartbeat: boolean;
+  // Delegate backend: Task CRUD + delegation from ConsoleScreen.
+  // OpenClaw/Hermes: no existing task surface — keep `false`.
+  consoleTasks: boolean;
+  consoleCreateTask: boolean;
+  // Delegate backend (Phase 6): multi-agent board meetings surface.
+  // OpenClaw/Hermes have no equivalent — keep `false`.
+  consoleBoardMeetings: boolean;
+  consoleCreateBoardMeeting: boolean;
+  // Delegate backend (Phase 6): notifications prefs + logs screen.
+  // OpenClaw/Hermes: keep `false` — they surface alerts elsewhere.
+  consoleNotifications: boolean;
+  // Delegate backend (Phase 7): mobile admin command center.
+  // OpenClaw/Hermes have no admin surface — keep `false`.
+  consoleAdmin: boolean;
+  consoleAdminUsers: boolean;
+  consoleAdminWorkspaces: boolean;
+  consoleAdminBilling: boolean;
+  consoleAdminAudit: boolean;
+  consoleAdminSessions: boolean;
+  // Phase 1a additions (Delegate-mobile alignment plan iter 3):
+  // Skills view-only screen (no APPLY); already-true `consoleSkills` covers
+  // the section presence — `consoleSkillsView` gates the read-only renderer.
+  consoleSkillsView: boolean;
+  // Delegate admin observability reads, wired in Phase 3.
+  consoleAdminLogs: boolean;
+  consoleAdminScheduledTasks: boolean;
+  consoleAdminContainerTelemetry: boolean;
+  // Phase 4: device-scoped push + Realtime fanout.
+  pushNotifications: boolean;
+  realtimeForeground: boolean;
+  // Phase 4.5: office-game Delegate character mapping. Delegate-only.
+  // OpenClaw/Hermes keep their existing 2.5s session-poll office UX.
+  officeGameDelegate: boolean;
   openClawConfigScreens: boolean;
 };
 
@@ -67,6 +100,24 @@ const OPENCLAW_CAPABILITIES: GatewayBackendCapabilities = {
   consoleAgentDetail: true,
   consoleAgentSessionsBoard: true,
   consoleHeartbeat: true,
+  consoleTasks: false,
+  consoleCreateTask: false,
+  consoleBoardMeetings: false,
+  consoleCreateBoardMeeting: false,
+  consoleNotifications: false,
+  consoleAdmin: false,
+  consoleAdminUsers: false,
+  consoleAdminWorkspaces: false,
+  consoleAdminBilling: false,
+  consoleAdminAudit: false,
+  consoleAdminSessions: false,
+  consoleSkillsView: false,
+  consoleAdminLogs: false,
+  consoleAdminScheduledTasks: false,
+  consoleAdminContainerTelemetry: false,
+  pushNotifications: false,
+  realtimeForeground: false,
+  officeGameDelegate: false,
   openClawConfigScreens: true,
 };
 
@@ -93,6 +144,24 @@ const HERMES_CAPABILITIES: GatewayBackendCapabilities = {
   consoleAgentDetail: false,
   consoleAgentSessionsBoard: false,
   consoleHeartbeat: false,
+  consoleTasks: false,
+  consoleCreateTask: false,
+  consoleBoardMeetings: false,
+  consoleCreateBoardMeeting: false,
+  consoleNotifications: false,
+  consoleAdmin: false,
+  consoleAdminUsers: false,
+  consoleAdminWorkspaces: false,
+  consoleAdminBilling: false,
+  consoleAdminAudit: false,
+  consoleAdminSessions: false,
+  consoleSkillsView: false,
+  consoleAdminLogs: false,
+  consoleAdminScheduledTasks: false,
+  consoleAdminContainerTelemetry: false,
+  pushNotifications: false,
+  realtimeForeground: false,
+  officeGameDelegate: false,
   openClawConfigScreens: false,
 };
 
@@ -105,7 +174,8 @@ const DELEGATE_CAPABILITIES: GatewayBackendCapabilities = {
   modelSelection: false,
   configRead: false,
   configWrite: false,
-  consoleChannels: false,
+  // Phase 1a: flag flipped to true so Phase 3 can wire ChannelsScreen.
+  consoleChannels: true,
   consoleCron: true,
   consoleCronCreate: false,
   consoleSkills: true,
@@ -116,9 +186,27 @@ const DELEGATE_CAPABILITIES: GatewayBackendCapabilities = {
   consoleFiles: false,
   consoleLogs: false,
   consoleAgentList: true,
-  consoleAgentDetail: false,
-  consoleAgentSessionsBoard: false,
+  consoleAgentDetail: true,
+  consoleAgentSessionsBoard: true,
   consoleHeartbeat: true,
+  consoleTasks: true,
+  consoleCreateTask: true,
+  consoleBoardMeetings: true,
+  consoleCreateBoardMeeting: true,
+  consoleNotifications: true,
+  consoleAdmin: true,
+  consoleAdminUsers: true,
+  consoleAdminWorkspaces: true,
+  consoleAdminBilling: true,
+  consoleAdminAudit: true,
+  consoleAdminSessions: true,
+  consoleSkillsView: true,
+  consoleAdminLogs: true,
+  consoleAdminScheduledTasks: true,
+  consoleAdminContainerTelemetry: true,
+  pushNotifications: true,
+  realtimeForeground: true,
+  officeGameDelegate: true,
   openClawConfigScreens: false,
 };
 
