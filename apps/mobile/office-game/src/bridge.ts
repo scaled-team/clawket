@@ -7,6 +7,7 @@ import {
   triggerCharacterRushToDesk,
   type Character,
 } from "./character";
+import { pushAdHocBubble } from "./bubble-scheduler";
 import type { BubbleContext } from "./bubbles";
 import {
   DEFAULT_OFFICE_CHANNEL_SLOT_CONFIG,

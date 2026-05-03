@@ -784,6 +784,6 @@ export function OfficeTab(): React.JSX.Element {
   }, [handleLoadEnd, officeLoadEndHandlerRef]);
 
   return (
-    <View style={styles.container} />
+    <View testID="tab-Office-body" style={styles.container} />
   );
 }

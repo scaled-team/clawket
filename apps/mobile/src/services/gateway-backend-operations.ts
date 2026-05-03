@@ -2,6 +2,8 @@ import type { GatewayConfig } from '../types';
 import type { ToolsCatalogResult } from '../types/index';
 import type { CostSummary, UsageResult } from '../types/usage';
 import { resolveGatewayBackendKind } from './gateway-backends';
+import type { DelegateConnectionConfig } from './delegate-http-adapter';
+import { normalizeUrl } from './delegate-http-adapter';
 
 type GatewayRequestFn = <T = unknown>(method: string, params?: object) => Promise<T>;
 
@@ -264,5 +266,58 @@ function deriveBaseUrl(urlText: string | undefined, wsPathPattern: RegExp): stri
       .replace(/^ws(s?):\/\//, 'http$1://')
       .replace(/\/+$/, '')
       .replace(wsPathPattern, '');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Delegate-specific REST operations (Phase 4.5: office-game mapping)
+// ---------------------------------------------------------------------------
+
+export type ActiveDelegationRow = {
+  id: string;
+  taskId: string;
+  taskTitle?: string | null;
+  status: string;
+  /** agentId of the assigned agent profile (assigneeAgentId) */
+  assigneeAgentId?: string | null;
+  updatedAt?: string | null;
+};
+
+/**
+ * Fetch delegations with status=running from the Delegate REST API.
+ * Placed here per CLAUDE.md rule 10: backend-specific request semantics
+ * belong in gateway-backend-operations.ts, not gateway.ts.
+ *
+ * Wraps GET /api/tasks/delegations?status=running (returns current user's delegations).
+ * Falls back to an empty list on error so the Office game degrades gracefully.
+ */
+export async function listActiveDelegations(
+  config: DelegateConnectionConfig,
+): Promise<ActiveDelegationRow[]> {
+  try {
+    const base = normalizeUrl(config.apiUrl);
+    const url = `${base}/api/tasks/delegations?status=running&limit=20`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${config.apiToken}` },
+    });
+    if (!res.ok) return [];
+    const json = await res.json();
+    const raw: unknown[] = json.data ?? json.delegations ?? json ?? [];
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item) => {
+      const r = item as Record<string, unknown>;
+      return {
+        id: String(r.id ?? ''),
+        taskId: String(r.taskId ?? ''),
+        taskTitle: typeof r.taskTitle === 'string' ? r.taskTitle : null,
+        status: String(r.status ?? 'running'),
+        assigneeAgentId: typeof r.assigneeAgentId === 'string' ? r.assigneeAgentId
+          : typeof r.agentId === 'string' ? r.agentId
+          : null,
+        updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
+      };
+    });
+  } catch {
+    return [];
   }
 }
