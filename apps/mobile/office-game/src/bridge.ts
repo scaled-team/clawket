@@ -47,6 +47,22 @@ interface CharacterTapMessage {
   characterId: string;
 }
 
+// Phase 4.5 — Delegate LiveEvent → bridge translation. Strictly additive to
+// the BridgeMessage union; OpenClaw and Hermes never emit these.
+interface CharacterRushMessage {
+  type: "CHARACTER_RUSH";
+  characterId: string;
+  durationMs?: number;
+}
+
+interface CharacterBubbleMessage {
+  type: "CHARACTER_BUBBLE";
+  characterId: string;
+  kind: "exclamation" | "celebration";
+  text?: string;
+  ttlMs?: number;
+}
+
 interface UsageUpdateMessage {
   type: "USAGE_UPDATE";
   todayCost: number;
@@ -143,6 +159,8 @@ type BridgeMessage =
   | SessionUpdateMessage
   | TypingStateMessage
   | CharacterTapMessage
+  | CharacterRushMessage
+  | CharacterBubbleMessage
   | MenuActionMessage
   | UsageUpdateMessage
   | OfficeChannelConfigMessage
@@ -284,8 +302,29 @@ function handleMessage(event: MessageEvent): void {
       setLocale(data.locale);
       break;
     case "CHARACTER_TAP":
-      // v1: no-op, hook for v2
+      // Phase 4.5 — outbound for RN routing (CHARACTER_TAP_OUTBOUND).
+      // RN side resolves characterId → AgentProfile and navigates.
+      if ((window as any).ReactNativeWebView) {
+        (window as any).ReactNativeWebView.postMessage(
+          JSON.stringify({ type: "CHARACTER_TAP_OUTBOUND", characterId: data.characterId }),
+        );
+      }
       break;
+    case "CHARACTER_RUSH": {
+      // Phase 4.5 — Delegate `delegation.started` LiveEvent maps here.
+      const target = characters.find((c) => c.id === data.characterId);
+      if (target) {
+        triggerCharacterRushToDesk(target, data.durationMs ?? 10_000);
+        if (onCharactersChanged) onCharactersChanged(characters);
+      }
+      break;
+    }
+    case "CHARACTER_BUBBLE": {
+      // Phase 4.5 — Delegate `agent.approval.requested` (exclamation) and
+      // optional `delegation.completed` (celebration) LiveEvents map here.
+      pushAdHocBubble(data.characterId, data.kind, data.text, data.ttlMs);
+      break;
+    }
   }
 }
 

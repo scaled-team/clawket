@@ -10,6 +10,8 @@ import { useAppContext } from '../../contexts/AppContext';
 import { analyticsEvents } from '../../services/analytics/events';
 import { selectByBackend } from '../../services/gateway-backends';
 import type { GatewayBackendCapabilities } from '../../services/gateway-backends';
+import { useDelegateLiveEvents } from '../../contexts/DelegateLiveEventsContext';
+import { useDelegateOfficeMapping } from './useDelegateOfficeMapping';
 import { StorageService } from '../../services/storage';
 import { useAppTheme } from '../../theme';
 import type { ConsoleStackParamList } from '../ConsoleScreen/sharedNavigator';
@@ -207,6 +209,130 @@ export function OfficeTab(): React.JSX.Element {
     () => new Set<string>(officeInteractionConfig.disabledPropActions),
     [officeInteractionConfig],
   );
+
+  // ─── Phase 4.5 — Delegate LiveEvent → office-game bridge wiring ────────────
+  // Subscribes to delegation.* + agent.* events and translates them into
+  // postMessages the WebView (`bridge.ts`) understands. OpenClaw + Hermes
+  // never see these subscribers because the gating capability flag stays
+  // false on those backends — the existing 2.5s session poll continues to
+  // drive their office UX (Non-Regression Rule).
+  const officeGameDelegate = gateway.getBackendCapabilities().officeGameDelegate;
+  const { subscribe: subscribeLiveEvent } = useDelegateLiveEvents();
+  const officeMapping = useDelegateOfficeMapping();
+  const officeMappingRef = useRef(officeMapping);
+  useEffect(() => {
+    officeMappingRef.current = officeMapping;
+  }, [officeMapping]);
+
+  useEffect(() => {
+    if (!officeGameDelegate) return;
+    const post = (msg: object) => {
+      officeWebViewRef.current?.postMessage(JSON.stringify(msg));
+    };
+    const resolveCharacterId = (
+      payload: Record<string, unknown>,
+    ): 'subagent' | 'assistant' | null => {
+      const m = officeMappingRef.current;
+      const agentId = (payload.agentId as string | undefined) ?? null;
+      if (agentId && m.subagent?.agentId === agentId) return 'subagent';
+      if (agentId && m.assistant?.agentId === agentId) return 'assistant';
+      // Default: subagent if any active running delegation exists, else assistant.
+      return m.subagent ? 'subagent' : m.assistant ? 'assistant' : null;
+    };
+
+    const unsubAgentMessageNew = subscribeLiveEvent('agent.message.new', (payload) => {
+      const charId = resolveCharacterId(payload);
+      if (!charId) return;
+      const lastMessage = (payload.text as string | undefined) ?? '';
+      post({
+        type: 'SESSION_UPDATE',
+        sessions: [
+          {
+            key: `delegate:${charId}`,
+            kind: 'delegate',
+            channel: 'delegate',
+            active: true,
+            label: charId,
+            updatedAt: Date.now(),
+            lastMessage: lastMessage.slice(0, 200),
+          },
+        ],
+      });
+    });
+
+    const unsubAgentStreaming = subscribeLiveEvent('agent.message.streaming', (_payload) => {
+      // Reuses the existing TYPING_STATE for the assistant character.
+      post({ type: 'TYPING_STATE', isTyping: true });
+    });
+
+    const unsubDelegationStarted = subscribeLiveEvent('delegation.started', (payload) => {
+      const charId = resolveCharacterId(payload);
+      if (!charId) return;
+      post({
+        type: 'SESSION_UPDATE',
+        sessions: [
+          {
+            key: `delegate:${charId}`,
+            kind: 'delegate',
+            channel: 'delegate',
+            active: true,
+            label: charId,
+            updatedAt: Date.now(),
+          },
+        ],
+      });
+      post({ type: 'CHARACTER_RUSH', characterId: charId, durationMs: 10_000 });
+    });
+
+    const setInactive = (payload: Record<string, unknown>) => {
+      const charId = resolveCharacterId(payload);
+      if (!charId) return;
+      post({
+        type: 'SESSION_UPDATE',
+        sessions: [
+          {
+            key: `delegate:${charId}`,
+            kind: 'delegate',
+            channel: 'delegate',
+            active: false,
+            label: charId,
+            updatedAt: Date.now(),
+          },
+        ],
+      });
+    };
+    const unsubDelegationCompleted = subscribeLiveEvent('delegation.completed', (payload) => {
+      setInactive(payload);
+      const charId = resolveCharacterId(payload);
+      if (charId) {
+        post({ type: 'CHARACTER_BUBBLE', characterId: charId, kind: 'celebration', ttlMs: 4_000 });
+      }
+    });
+    const unsubDelegationFailed = subscribeLiveEvent('delegation.failed', setInactive);
+    const unsubDelegationCancelled = subscribeLiveEvent('delegation.cancelled', setInactive);
+
+    const unsubApprovalRequested = subscribeLiveEvent('agent.approval.requested', (payload) => {
+      const charId = resolveCharacterId(payload);
+      if (!charId) return;
+      post({
+        type: 'CHARACTER_BUBBLE',
+        characterId: charId,
+        kind: 'exclamation',
+        ttlMs: 8_000,
+      });
+    });
+
+    return () => {
+      unsubAgentMessageNew();
+      unsubAgentStreaming();
+      unsubDelegationStarted();
+      unsubDelegationCompleted();
+      unsubDelegationFailed();
+      unsubDelegationCancelled();
+      unsubApprovalRequested();
+    };
+  }, [officeGameDelegate, subscribeLiveEvent, officeWebViewRef]);
+
 
   useEffect(() => {
     let mounted = true;

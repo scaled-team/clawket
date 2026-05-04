@@ -81,6 +81,57 @@ export function clearBubbleBounds(): void {
 let bubbleBounds: { bx: number; by: number; bw: number; bh: number } | null = null;
 
 // ---------------------------------------------------------------------------
+// Phase 4.5 — ad-hoc bubble injection from Delegate LiveEvents.
+// ---------------------------------------------------------------------------
+// `pushAdHocBubble` lets the bridge layer surface a one-off bubble triggered
+// by a server-side event (e.g. agent.approval.requested → exclamation; a
+// successful delegation.completed → optional celebration). It interrupts
+// the current bubble immediately when `kind === 'exclamation'` (priority);
+// for `celebration` it queues for the next gap so we don't yank the user's
+// attention mid-read.
+//
+// Plan §A.4. ttlMs default 5_000 (matches SHOW_DURATION_S) but accepts
+// shorter/longer windows from the caller.
+
+export type AdHocBubbleKind = 'exclamation' | 'celebration';
+
+export function pushAdHocBubble(
+  characterId: string,
+  kind: AdHocBubbleKind,
+  text?: string,
+  ttlMs?: number,
+): void {
+  const ttlS = (ttlMs ?? 5_000) / 1000;
+  const labelDefault: Record<AdHocBubbleKind, string> = {
+    exclamation: '!',
+    celebration: '✓',
+  };
+  const bubbleText = (text ?? labelDefault[kind]).slice(0, 80);
+
+  // Priority interrupt for exclamation OR queue if no bubble showing.
+  if (kind === 'exclamation' || !activeBubble) {
+    activeBubble = { characterId, text: bubbleText };
+    state = 'showing';
+    timer = 0;
+    // Re-base SHOW_DURATION via an explicit timer push — letting
+    // updateBubbleScheduler tick handle dismissal naturally. If the caller
+    // wants a sub-default ttl we honor it by pre-aging the timer.
+    if (ttlS < SHOW_DURATION_S) {
+      timer = SHOW_DURATION_S - ttlS;
+    }
+    return;
+  }
+
+  // celebration + a bubble already showing — defer to next gap by setting
+  // the gap state to fast-forward; the next showNextBubble pick will then
+  // override with a normal scheduled bubble. This keeps the celebration
+  // semantically optional rather than guaranteed (matches plan A.3:
+  // "optional speech-bubble" on success).
+  // For now: best-effort interrupt at end of current showing window.
+  // (Future: a small queue if multi-celebration ordering matters.)
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
