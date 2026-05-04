@@ -384,6 +384,11 @@ export function useGatewayChatEvents(params: Params) {
     };
 
     const loadAgents = () => {
+      // workspace-scope: not-scoped — chat history may reference agents that
+      // span workspaces. The gateway-level listAgents() public API stays
+      // transport-only per `apps/mobile/CLAUDE.md` rule 10; backend-specific
+      // workspace filtering belongs in delegate-* services that are called
+      // directly from screens (see TaskListScreen, AgentListScreen).
       gateway.listAgents().then(async (result) => {
         if (result.agents.length > 0) {
           // Immediately provide basic agent data so UI has something to show

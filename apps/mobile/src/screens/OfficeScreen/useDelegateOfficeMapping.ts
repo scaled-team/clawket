@@ -20,6 +20,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../../contexts/AppContext';
 import { useDelegateLiveEvents } from '../../contexts/DelegateLiveEventsContext';
+import { useDelegateWorkspace } from '../../contexts/WorkspaceContext';
 import { listDelegateAgents } from '../../services/delegate-agents';
 import { listActiveDelegations } from '../../services/gateway-backend-operations';
 import type { AgentProfileRow } from '../../services/delegate-agents';
@@ -106,6 +107,7 @@ function buildMapping(
 export function useDelegateOfficeMapping(): DelegateOfficeMapping {
   const { gateway } = useAppContext();
   const { subscribe } = useDelegateLiveEvents();
+  const { activeWorkspace } = useDelegateWorkspace();
   const [mapping, setMapping] = useState<DelegateOfficeMapping>(EMPTY_MAPPING);
   const mountedRef = useRef(true);
 
@@ -122,7 +124,10 @@ export function useDelegateOfficeMapping(): DelegateOfficeMapping {
 
     try {
       const [agentsResult, delegations] = await Promise.all([
-        listDelegateAgents(dc),
+        listDelegateAgents(
+          dc,
+          activeWorkspace?.id ? { workspaceId: activeWorkspace.id } : undefined,
+        ),
         listActiveDelegations(dc),
       ]);
       if (!mountedRef.current) return;
@@ -132,7 +137,7 @@ export function useDelegateOfficeMapping(): DelegateOfficeMapping {
       // Best-effort; degrade to empty mapping.
       if (mountedRef.current) setMapping(EMPTY_MAPPING);
     }
-  }, [gateway]);
+  }, [gateway, activeWorkspace?.id]);
 
   // Initial fetch
   useEffect(() => {
