@@ -82,7 +82,7 @@ export function GatewayConfigViewerScreen(): React.JSX.Element {
 
   if (!configText) {
     return (
-      <View style={styles.emptyWrap}>
+      <View testID="gateway-config-viewer" style={styles.emptyWrap}>
         <EmptyState
           icon="{}"
           title={t('View Config')}
@@ -93,7 +93,7 @@ export function GatewayConfigViewerScreen(): React.JSX.Element {
   }
 
   return (
-    <ScrollView contentContainerStyle={createCardContentStyle()}>
+    <ScrollView testID="gateway-config-viewer" contentContainerStyle={createCardContentStyle()}>
       <View style={styles.headerBlock}>
         <Text style={styles.title}>{t('Current OpenClaw config')}</Text>
         <Text style={styles.subtitle}>

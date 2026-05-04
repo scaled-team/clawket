@@ -350,7 +350,7 @@ export function ChatHistoryDetailScreen(): React.JSX.Element {
   });
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View testID="chat-history-detail" style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={styles.searchRow}>
         <SearchInput
           value={searchText}

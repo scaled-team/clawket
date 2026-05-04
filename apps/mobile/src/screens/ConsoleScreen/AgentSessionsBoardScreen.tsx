@@ -1,21 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import { RefreshCw } from 'lucide-react-native';
+import { Plus, RefreshCw } from 'lucide-react-native';
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
-import { EmptyState, HeaderActionButton } from '../../components/ui';
+import { EmptyState, HeaderActionButton, LoadingState } from '../../components/ui';
 import { useAppContext } from '../../contexts/AppContext';
 import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader';
 import type { AgentInfo } from '../../types/agent';
+import {
+  ensureDelegateGroup,
+  getDelegateAgentStatus,
+  getDelegateServerHealth,
+  listDelegateGroups,
+  type DelegateAgentStatus,
+  type DelegateGroup,
+  type DelegateServerHealth,
+} from '../../services/delegate-groups';
 import { useAppTheme } from '../../theme';
 import { FontSize, FontWeight, Radius, Shadow, Space } from '../../theme/tokens';
 import { SessionInfo } from '../../types';
@@ -487,6 +499,14 @@ function SessionCard({
 }
 
 export function AgentSessionsBoardScreen(): React.JSX.Element {
+  const { gateway } = useAppContext();
+  if (gateway.getBackendKind() === 'delegate') {
+    return <DelegateSessionsBoard />;
+  }
+  return <OpenClawSessionsBoard />;
+}
+
+function OpenClawSessionsBoard(): React.JSX.Element {
   const navigation = useNavigation<AgentSessionsBoardNavigation>();
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
@@ -983,6 +1003,466 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['theme']['colors'])
       width: '50%',
       paddingHorizontal: Space.xs,
       marginBottom: Space.sm,
+    },
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Delegate backend — droplet groups, agent status, server health sections.
+// ────────────────────────────────────────────────────────────────────────────
+
+const DELEGATE_SESSIONS_REFRESH_MS = 5_000;
+
+function DelegateSessionsBoard(): React.JSX.Element {
+  const navigation = useNavigation<AgentSessionsBoardNavigation>();
+  const { theme } = useAppTheme();
+  const { t } = useTranslation('console');
+  const { t: tCommon } = useTranslation('common');
+  const { gateway } = useAppContext();
+  const isFocused = useIsFocused();
+  const styles = useMemo(() => createDelegateBoardStyles(theme.colors), [theme.colors]);
+
+  const [groups, setGroups] = useState<DelegateGroup[]>([]);
+  const [status, setStatus] = useState<DelegateAgentStatus | null>(null);
+  const [health, setHealth] = useState<DelegateServerHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showEnsureForm, setShowEnsureForm] = useState(false);
+  const [ensureJid, setEnsureJid] = useState('');
+  const [ensureName, setEnsureName] = useState('');
+  const [ensuring, setEnsuring] = useState(false);
+
+  const load = useCallback(async (mode: 'initial' | 'manual' | 'poll' = 'manual') => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) {
+      setError(t('Delegate backend is not configured.'));
+      setLoading(false);
+      return;
+    }
+    if (mode === 'initial') setLoading(true);
+    else if (mode === 'manual') setRefreshing(true);
+    try {
+      const [g, s, h] = await Promise.all([
+        listDelegateGroups(dc).catch(() => ({ groups: [] as DelegateGroup[] })),
+        getDelegateAgentStatus(dc).catch(() => null),
+        getDelegateServerHealth(dc).catch(() => null),
+      ]);
+      setGroups(g.groups);
+      setStatus(s);
+      setHealth(h);
+      setError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('Failed to load sessions board');
+      setError(message);
+    } finally {
+      setLoading(false);
+      if (mode === 'manual') setRefreshing(false);
+    }
+  }, [gateway, t]);
+
+  useNativeStackModalHeader({
+    navigation,
+    title: t('Agent & Session Board'),
+    onClose: () => navigation.goBack(),
+    rightContent: (
+      <HeaderActionButton
+        icon={RefreshCw}
+        onPress={() => {
+          void load('manual');
+        }}
+        disabled={refreshing}
+      />
+    ),
+  });
+
+  useEffect(() => {
+    if (!isFocused) return;
+    void load('initial');
+  }, [isFocused, load]);
+
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    const timer = setInterval(() => {
+      void load('poll');
+    }, DELEGATE_SESSIONS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [isFocused, load]);
+
+  const handleEnsureGroup = useCallback(async () => {
+    const jid = ensureJid.trim();
+    const name = ensureName.trim();
+    if (!jid || !name) {
+      Alert.alert(tCommon('Error'), t('Please provide both a JID and a name.'));
+      return;
+    }
+    const dc = gateway.getDelegateConfig();
+    if (!dc) return;
+    setEnsuring(true);
+    try {
+      await ensureDelegateGroup(dc, jid, name);
+      setShowEnsureForm(false);
+      setEnsureJid('');
+      setEnsureName('');
+      void load('manual');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('Failed to ensure group');
+      Alert.alert(tCommon('Error'), message);
+    } finally {
+      setEnsuring(false);
+    }
+  }, [ensureJid, ensureName, gateway, load, t, tCommon]);
+
+  if (loading) {
+    return (
+      <View style={styles.root}>
+        <LoadingState message={t('Loading sessions board...')} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              void load('manual');
+            }}
+            tintColor={theme.colors.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        {/* Droplet status */}
+        <Text style={styles.sectionTitle}>{t('Droplet')}</Text>
+        <View style={styles.card} testID="sessions-board-droplet">
+          <View style={styles.dropletHeader}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: status?.connected
+                    ? theme.colors.success
+                    : theme.colors.error,
+                },
+              ]}
+            />
+            <Text style={styles.dropletStatus}>
+              {status?.connected ? t('Connected') : t('Disconnected')}
+            </Text>
+          </View>
+          {status?.serverUrl ? (
+            <DelegateMetaRow label={t('Server')} value={status.serverUrl} styles={styles} />
+          ) : null}
+          {status?.sessionId ? (
+            <DelegateMetaRow label={t('Session')} value={status.sessionId} styles={styles} />
+          ) : null}
+          {status?.version ? (
+            <DelegateMetaRow label={t('Version')} value={status.version} styles={styles} />
+          ) : null}
+          {status?.lastHeartbeatAt ? (
+            <DelegateMetaRow
+              label={t('Last heartbeat')}
+              value={new Date(status.lastHeartbeatAt).toLocaleString()}
+              styles={styles}
+            />
+          ) : null}
+          {status?.groups && status.groups.length > 0 ? (
+            <DelegateMetaRow
+              label={t('Joined groups')}
+              value={status.groups.join(', ')}
+              styles={styles}
+            />
+          ) : null}
+        </View>
+
+        {/* Health */}
+        <Text style={styles.sectionTitle}>{t('Health')}</Text>
+        <View style={styles.card} testID="sessions-board-health">
+          <View style={styles.dropletHeader}>
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: health?.ok ? theme.colors.success : theme.colors.error,
+                },
+              ]}
+            />
+            <Text style={styles.dropletStatus}>{health?.ok ? t('Healthy') : t('Degraded')}</Text>
+          </View>
+          {typeof health?.uptimeSec === 'number' ? (
+            <DelegateMetaRow
+              label={t('Uptime')}
+              value={`${Math.floor(health.uptimeSec / 3600)}h ${Math.floor((health.uptimeSec % 3600) / 60)}m`}
+              styles={styles}
+            />
+          ) : null}
+          {typeof health?.cpuPct === 'number' ? (
+            <DelegateMetaRow label={t('CPU')} value={`${health.cpuPct.toFixed(1)}%`} styles={styles} />
+          ) : null}
+          {typeof health?.memPct === 'number' ? (
+            <DelegateMetaRow label={t('Memory')} value={`${health.memPct.toFixed(1)}%`} styles={styles} />
+          ) : null}
+          {typeof health?.diskPct === 'number' ? (
+            <DelegateMetaRow label={t('Disk')} value={`${health.diskPct.toFixed(1)}%`} styles={styles} />
+          ) : null}
+          {health?.services ? (
+            <View style={{ marginTop: Space.sm, gap: 4 }}>
+              {Object.entries(health.services).map(([svc, state]) => (
+                <DelegateMetaRow
+                  key={svc}
+                  label={svc}
+                  value={String(state)}
+                  styles={styles}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
+
+        {/* Groups */}
+        <View style={styles.groupsHeaderRow}>
+          <Text style={styles.sectionTitle}>{t('Groups')}</Text>
+          <Pressable
+            onPress={() => setShowEnsureForm((prev) => !prev)}
+            style={[styles.inlineButton, { borderColor: theme.colors.primary }]}
+          >
+            <Plus size={14} color={theme.colors.primary} strokeWidth={2.2} />
+            <Text style={[styles.inlineButtonText, { color: theme.colors.primary }]}>
+              {t('Ensure group')}
+            </Text>
+          </Pressable>
+        </View>
+
+        {showEnsureForm ? (
+          <View style={styles.card}>
+            <Text style={styles.formLabel}>{t('JID')}</Text>
+            <View style={styles.formRow}>
+              <TextInput
+                style={styles.formInput}
+                value={ensureJid}
+                onChangeText={setEnsureJid}
+                placeholder="delegate:main"
+                placeholderTextColor={theme.colors.textSubtle}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!ensuring}
+              />
+            </View>
+            <Text style={styles.formLabel}>{t('Name')}</Text>
+            <View style={styles.formRow}>
+              <TextInput
+                style={styles.formInput}
+                value={ensureName}
+                onChangeText={setEnsureName}
+                placeholder={t('Group name')}
+                placeholderTextColor={theme.colors.textSubtle}
+                editable={!ensuring}
+              />
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                { backgroundColor: theme.colors.primary },
+                ensuring && { opacity: 0.6 },
+              ]}
+              onPress={handleEnsureGroup}
+              disabled={ensuring}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.submitButtonText, { color: theme.colors.primaryText }]}>
+                {ensuring ? tCommon('Saving...') : t('Ensure group')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {groups.length === 0 ? (
+          <EmptyState icon="👥" title={t('No groups registered')} />
+        ) : (
+          <View>
+            {groups.map((group) => (
+              <View
+                key={group.jid}
+                style={styles.card}
+                testID={`sessions-board-group-${group.jid}`}
+              >
+                <Text style={styles.groupName} numberOfLines={1}>
+                  {group.name || group.jid}
+                </Text>
+                <Text style={styles.groupJid} numberOfLines={1}>
+                  {group.jid}
+                </Text>
+                {typeof group.members === 'number' ? (
+                  <DelegateMetaRow
+                    label={t('Members')}
+                    value={String(group.members)}
+                    styles={styles}
+                  />
+                ) : null}
+                {group.lastActivityAt ? (
+                  <DelegateMetaRow
+                    label={t('Last activity')}
+                    value={relativeTime(new Date(group.lastActivityAt).getTime())}
+                    styles={styles}
+                  />
+                ) : null}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function DelegateMetaRow({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createDelegateBoardStyles>;
+}): React.JSX.Element {
+  return (
+    <View style={styles.metaRow}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text style={styles.metaValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function createDelegateBoardStyles(colors: ReturnType<typeof useAppTheme>['theme']['colors']) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingHorizontal: Space.lg,
+      paddingTop: Space.md,
+      paddingBottom: Space.xxxl,
+      gap: Space.sm,
+    },
+    errorText: {
+      color: colors.error,
+      fontSize: FontSize.sm,
+      lineHeight: 18,
+    },
+    sectionTitle: {
+      fontSize: FontSize.xl,
+      fontWeight: FontWeight.semibold,
+      color: colors.text,
+      marginTop: Space.md,
+      marginBottom: Space.xs,
+    },
+    card: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radius.md,
+      padding: Space.md,
+      gap: 6,
+      ...Shadow.sm,
+    },
+    dropletHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Space.sm,
+    },
+    statusDot: {
+      width: 10,
+      height: 10,
+      borderRadius: Radius.full,
+    },
+    dropletStatus: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: colors.text,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: 4,
+      gap: Space.md,
+    },
+    metaLabel: {
+      fontSize: FontSize.sm,
+      color: colors.textMuted,
+      fontWeight: FontWeight.medium,
+    },
+    metaValue: {
+      flex: 1,
+      textAlign: 'right',
+      fontSize: FontSize.sm,
+      color: colors.text,
+    },
+    groupsHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: Space.md,
+    },
+    inlineButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderWidth: 1,
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.md,
+      paddingVertical: 6,
+    },
+    inlineButtonText: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+    },
+    groupName: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: colors.text,
+    },
+    groupJid: {
+      fontSize: FontSize.sm,
+      color: colors.textMuted,
+    },
+    formLabel: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.medium,
+      color: colors.textMuted,
+      marginTop: Space.sm,
+      marginBottom: 4,
+    },
+    formRow: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.inputBackground,
+      borderRadius: Radius.md,
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+    },
+    formInput: {
+      fontSize: FontSize.base,
+      color: colors.text,
+      paddingVertical: 0,
+    },
+    submitButton: {
+      marginTop: Space.md,
+      borderRadius: Radius.md,
+      paddingVertical: 11,
+      alignItems: 'center',
+    },
+    submitButtonText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
     },
   });
 }

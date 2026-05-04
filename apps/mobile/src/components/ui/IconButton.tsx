@@ -9,6 +9,7 @@ type Props = {
   disabled?: boolean;
   size?: number;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 };
 
 export function IconButton({
@@ -18,6 +19,7 @@ export function IconButton({
   disabled,
   size = HitSize.md,
   style,
+  testID,
 }: Props): React.JSX.Element {
   return (
     <TouchableOpacity
@@ -26,6 +28,7 @@ export function IconButton({
       disabled={disabled}
       activeOpacity={0.6}
       style={[styles.base, { width: size, height: size }, disabled && styles.disabled, style]}
+      testID={testID}
     >
       {icon}
     </TouchableOpacity>

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useTabBarHeight } from '../../hooks/useTabBarHeight';
@@ -109,8 +109,16 @@ export function ConfigScreen(): React.JSX.Element {
   // so the app-level GestureHandlerRootView cannot reach into it.
   // Wrap with a local GestureHandlerRootView to enable Swipeable gestures.
   if (Platform.OS === 'ios') {
-    return <GestureHandlerRootView style={{ flex: 1 }}>{content}</GestureHandlerRootView>;
+    return (
+      <GestureHandlerRootView testID="tab-Config-body" style={{ flex: 1 }}>
+        {content}
+      </GestureHandlerRootView>
+    );
   }
 
-  return content;
+  return (
+    <View testID="tab-Config-body" style={{ flex: 1 }}>
+      {content}
+    </View>
+  );
 }

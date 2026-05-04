@@ -222,7 +222,7 @@ export function HelpCenterScreen(): React.JSX.Element {
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView testID="help-center" contentContainerStyle={styles.container}>
       {/* Section: How to Connect */}
       <View style={styles.section}>
         <View style={styles.sectionTitleRow}>

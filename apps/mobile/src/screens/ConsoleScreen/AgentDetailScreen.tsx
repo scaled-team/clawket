@@ -10,11 +10,21 @@ import {
   View,
 } from 'react-native';
 
-import { ChevronRight, UserRound } from 'lucide-react-native';
+import { ChevronRight, RefreshCw, UserRound } from 'lucide-react-native';
 import { useTranslation } from 'react-i18next';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { LoadingState } from '../../components/ui';
+import { EmptyState, HeaderActionButton, LoadingState } from '../../components/ui';
+import {
+  getDelegateAgent,
+  getDelegateAgentFeed,
+  getDelegateAgentMessages,
+  syncDelegateProfiles,
+  updateDelegateAgent,
+  type AgentChannelMessage,
+  type AgentFeedEvent,
+  type AgentProfileDetail,
+} from '../../services/delegate-agents';
 import { useGatewayPatch } from '../../hooks/useGatewayPatch';
 import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader';
 import { EmojiPicker } from '../../components/agents/EmojiPicker';
@@ -44,6 +54,20 @@ type AgentDetailRoute = RouteProp<ConsoleStackParamList, 'AgentDetail'>;
 type PickerTarget = 'primary' | 'fallback';
 
 export function AgentDetailScreen(): React.JSX.Element {
+  const { gateway } = useAppContext();
+  const route = useRoute<AgentDetailRoute>();
+  const { agentId } = route.params;
+  const isDelegateBackend = gateway.getBackendKind() === 'delegate';
+
+  // Delegate backend uses its own layout (tabs + toggle active + sync profiles).
+  // Dispatch at the top so each sub-component owns its own hook list.
+  if (isDelegateBackend) {
+    return <DelegateAgentDetail agentId={agentId} />;
+  }
+  return <OpenClawAgentDetail />;
+}
+
+function OpenClawAgentDetail(): React.JSX.Element {
   const { gateway, gatewayEpoch, currentAgentId, switchAgent, setAgents } = useAppContext();
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
@@ -610,6 +634,478 @@ function createStyles(colors: ReturnType<typeof import('../../theme').useAppThem
       color: colors.error,
       fontSize: FontSize.base,
       fontWeight: FontWeight.semibold,
+    },
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Delegate backend — separate layout with Profile/Feed/Messages/API Keys tabs.
+// ────────────────────────────────────────────────────────────────────────────
+
+type DelegateDetailTab = 'profile' | 'feed' | 'messages' | 'apikeys';
+
+function DelegateAgentDetail({ agentId }: { agentId: string }): React.JSX.Element {
+  const { gateway } = useAppContext();
+  const { theme } = useAppTheme();
+  const { t } = useTranslation('console');
+  const { t: tCommon } = useTranslation('common');
+  const navigation = useNavigation<AgentDetailNavigation>();
+  const styles = useMemo(() => createDelegateStyles(theme.colors), [theme]);
+
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<AgentProfileDetail | null>(null);
+  const [feed, setFeed] = useState<AgentFeedEvent[]>([]);
+  const [messages, setMessages] = useState<AgentChannelMessage[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<DelegateDetailTab>('profile');
+  const [toggling, setToggling] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+
+  const loadCore = useCallback(async () => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) {
+      setError(t('Delegate backend is not configured.'));
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const [p, f] = await Promise.all([
+        getDelegateAgent(dc, agentId),
+        getDelegateAgentFeed(dc, agentId, { limit: 50 }).catch(() => ({ events: [] })),
+      ]);
+      setProfile(p);
+      setFeed(f.events);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('Failed to load agent');
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId, gateway, t]);
+
+  useEffect(() => {
+    void loadCore();
+  }, [loadCore]);
+
+  // Lazy-load messages when the tab is first opened.
+  const loadMessages = useCallback(async () => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) return;
+    setMessagesLoading(true);
+    try {
+      const res = await getDelegateAgentMessages(dc, agentId, { limit: 50 });
+      setMessages(res.messages);
+    } catch {
+      // Empty state handles failure.
+    } finally {
+      setMessagesLoading(false);
+    }
+  }, [agentId, gateway]);
+
+  useEffect(() => {
+    if (tab === 'messages' && messages.length === 0 && !messagesLoading) {
+      void loadMessages();
+    }
+    // Intentionally not including messages.length to avoid looping on empty replies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const handleToggleActive = useCallback(async () => {
+    if (!profile || toggling) return;
+    const dc = gateway.getDelegateConfig();
+    if (!dc) return;
+    const next = !profile.isActive;
+    // Optimistic flip
+    setProfile({ ...profile, isActive: next });
+    setToggling(true);
+    try {
+      const updated = await updateDelegateAgent(dc, agentId, { isActive: next });
+      setProfile(updated);
+    } catch (err: unknown) {
+      // Revert on failure
+      setProfile({ ...profile, isActive: !next });
+      const message = err instanceof Error ? err.message : t('Failed to update agent');
+      Alert.alert(tCommon('Error'), message);
+    } finally {
+      setToggling(false);
+    }
+  }, [agentId, gateway, profile, t, tCommon, toggling]);
+
+  const handleSyncProfiles = useCallback(async () => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) return;
+    setSyncing(true);
+    try {
+      await syncDelegateProfiles(dc);
+      Alert.alert(tCommon('Success'), t('Agent profiles synced to droplet.'));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : t('Failed to sync profiles');
+      Alert.alert(tCommon('Error'), message);
+    } finally {
+      setSyncing(false);
+    }
+  }, [gateway, t, tCommon]);
+
+  const syncHeaderButton = useMemo(
+    () => (
+      <HeaderActionButton
+        icon={RefreshCw}
+        onPress={() => {
+          void handleSyncProfiles();
+        }}
+        disabled={syncing}
+        testID="agent-detail-sync-profiles"
+      />
+    ),
+    [handleSyncProfiles, syncing],
+  );
+
+  useNativeStackModalHeader({
+    navigation,
+    title: profile?.name || tCommon('Agent'),
+    rightContent: syncHeaderButton,
+    onClose: () => navigation.goBack(),
+  });
+
+  const renderTabBar = () => {
+    const items: { key: DelegateDetailTab; label: string }[] = [
+      { key: 'profile', label: t('Profile') },
+      { key: 'feed', label: t('Feed') },
+      { key: 'messages', label: t('Messages') },
+      { key: 'apikeys', label: t('API Keys') },
+    ];
+    return (
+      <View style={styles.tabBar}>
+        {items.map((item) => {
+          const active = tab === item.key;
+          return (
+            <Pressable
+              key={item.key}
+              testID={`agent-detail-tab-${item.key}`}
+              onPress={() => setTab(item.key)}
+              style={[
+                styles.tabItem,
+                {
+                  backgroundColor: active ? theme.colors.surfaceElevated : 'transparent',
+                  borderColor: active ? theme.colors.borderStrong : 'transparent',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: active ? theme.colors.text : theme.colors.textMuted },
+                ]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.root}>
+        <LoadingState message={t('Loading agent...')} />
+      </View>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <View style={styles.root}>
+        <EmptyState
+          icon="🤖"
+          title={error ?? t('Agent not found.')}
+          subtitle={t('Pull to refresh or try again.')}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      {renderTabBar()}
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {tab === 'profile' ? (
+          <View>
+            <View style={styles.profileHeader}>
+              <Text style={styles.profileName}>{profile.name}</Text>
+              <View
+                style={[
+                  styles.activeBadge,
+                  {
+                    backgroundColor: profile.isActive
+                      ? theme.colors.success + '20'
+                      : theme.colors.surfaceMuted,
+                  },
+                ]}
+                testID="agent-detail-active-badge"
+              >
+                <Text
+                  style={[
+                    styles.activeBadgeText,
+                    {
+                      color: profile.isActive ? theme.colors.success : theme.colors.textMuted,
+                    },
+                  ]}
+                >
+                  {profile.isActive ? t('Active') : t('Inactive')}
+                </Text>
+              </View>
+            </View>
+
+            {profile.role ? <MetaRow label={t('Role')} value={profile.role} styles={styles} /> : null}
+            {profile.model ? <MetaRow label={t('Model')} value={profile.model} styles={styles} /> : null}
+            {profile.heartbeatAt ? (
+              <MetaRow label={t('Last heartbeat')} value={formatRelative(profile.heartbeatAt)} styles={styles} />
+            ) : null}
+            {profile.lastMessageAt ? (
+              <MetaRow label={t('Last message')} value={formatRelative(profile.lastMessageAt)} styles={styles} />
+            ) : null}
+            {profile.createdAt ? (
+              <MetaRow label={t('Created')} value={formatRelative(profile.createdAt)} styles={styles} />
+            ) : null}
+
+            <TouchableOpacity
+              testID="agent-detail-toggle-active"
+              style={[
+                styles.toggleButton,
+                {
+                  backgroundColor: profile.isActive ? theme.colors.error : theme.colors.primary,
+                },
+                toggling && styles.buttonDisabled,
+              ]}
+              onPress={handleToggleActive}
+              disabled={toggling}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.toggleButtonText}>
+                {profile.isActive ? t('Stop Agent') : t('Start Agent')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {tab === 'feed' ? (
+          feed.length === 0 ? (
+            <EmptyState icon="📭" title={t('No recent activity')} />
+          ) : (
+            <View>
+              {feed.map((event) => (
+                <View key={event.id} style={styles.feedRow}>
+                  <Text style={styles.feedTitle} numberOfLines={1}>
+                    {event.title || event.type}
+                  </Text>
+                  {event.description ? (
+                    <Text style={styles.feedDescription} numberOfLines={2}>
+                      {event.description}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.feedTime}>{formatRelative(event.createdAt)}</Text>
+                </View>
+              ))}
+            </View>
+          )
+        ) : null}
+
+        {tab === 'messages' ? (
+          messagesLoading ? (
+            <LoadingState message={t('Loading messages...')} />
+          ) : messages.length === 0 ? (
+            <EmptyState icon="💬" title={t('No messages yet')} />
+          ) : (
+            <View>
+              {messages.map((msg) => (
+                <View key={msg.id} style={styles.messageRow}>
+                  <Text style={styles.messageRole} numberOfLines={1}>
+                    {msg.sender || (msg.isAI ? t('Agent') : t('User'))}
+                  </Text>
+                  <Text style={styles.messageText}>{msg.text}</Text>
+                  <Text style={styles.messageTime}>{formatRelative(msg.timestamp)}</Text>
+                </View>
+              ))}
+            </View>
+          )
+        ) : null}
+
+        {tab === 'apikeys' ? (
+          <EmptyState
+            icon="🔑"
+            title={t('Keys management desktop-only for now')}
+            subtitle={t('Create and rotate agent API keys from the desktop admin console.')}
+          />
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function MetaRow({
+  label,
+  value,
+  styles,
+}: {
+  label: string;
+  value: string;
+  styles: ReturnType<typeof createDelegateStyles>;
+}): React.JSX.Element {
+  return (
+    <View style={styles.metaRow}>
+      <Text style={styles.metaLabel}>{label}</Text>
+      <Text style={styles.metaValue} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function formatRelative(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return iso;
+  const diff = Date.now() - t;
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function createDelegateStyles(
+  colors: ReturnType<typeof import('../../theme').useAppTheme>['theme']['colors'],
+) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    tabBar: {
+      flexDirection: 'row',
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm,
+      gap: Space.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    tabItem: {
+      flex: 1,
+      minHeight: 34,
+      borderRadius: Radius.full,
+      borderWidth: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: Space.sm,
+    },
+    tabLabel: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+    },
+    content: {
+      padding: Space.lg,
+      paddingBottom: Space.xxxl,
+    },
+    profileHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: Space.md,
+      gap: Space.sm,
+    },
+    profileName: {
+      flex: 1,
+      fontSize: FontSize.xl,
+      fontWeight: FontWeight.semibold,
+      color: colors.text,
+    },
+    activeBadge: {
+      borderRadius: Radius.full,
+      paddingHorizontal: Space.md,
+      paddingVertical: 5,
+    },
+    activeBadgeText: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+    },
+    metaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Space.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: Space.md,
+    },
+    metaLabel: {
+      fontSize: FontSize.sm,
+      color: colors.textMuted,
+      fontWeight: FontWeight.medium,
+    },
+    metaValue: {
+      flex: 1,
+      textAlign: 'right',
+      fontSize: FontSize.sm,
+      color: colors.text,
+    },
+    toggleButton: {
+      marginTop: Space.xl,
+      borderRadius: Radius.md,
+      paddingVertical: 13,
+      alignItems: 'center',
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    toggleButtonText: {
+      color: '#fff',
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+    },
+    feedRow: {
+      paddingVertical: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: 4,
+    },
+    feedTitle: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: colors.text,
+    },
+    feedDescription: {
+      fontSize: FontSize.sm,
+      color: colors.textMuted,
+    },
+    feedTime: {
+      fontSize: FontSize.xs,
+      color: colors.textSubtle,
+    },
+    messageRow: {
+      paddingVertical: Space.md,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: 4,
+    },
+    messageRole: {
+      fontSize: FontSize.xs,
+      fontWeight: FontWeight.semibold,
+      color: colors.primary,
+      textTransform: 'uppercase',
+    },
+    messageText: {
+      fontSize: FontSize.base,
+      color: colors.text,
+      lineHeight: 22,
+    },
+    messageTime: {
+      fontSize: FontSize.xs,
+      color: colors.textSubtle,
     },
   });
 }

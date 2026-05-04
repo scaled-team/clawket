@@ -33,6 +33,8 @@ import { pickAgentIdentityAvatarUri } from '../../utils/agent-avatar-uri';
 import { ChatComposerPane } from './components/ChatComposerPane';
 import { ChatMessagePane } from './components/ChatMessagePane';
 import { ChatOverlays } from './components/ChatOverlays';
+import { ChatProgressStrip } from './components/ChatProgressStrip';
+import { ChatWorktreeHeader } from './components/ChatWorktreeHeader';
 import { renderChatMessageBubble } from './components/renderChatMessageBubble';
 import { useChatController } from './hooks/useChatController';
 import { useChatKeyboardLayout } from './hooks/useChatKeyboardLayout';
@@ -433,6 +435,14 @@ export function ChatScreenLayout({ controller, insets, onOpenSidebar, onAddGatew
   });
 
   const backendKind = resolveGatewayBackendKind(config);
+  // Phase 2 — worktree header + progress strip both need the delegate HTTP
+  // config. Only fetch when the active gateway is a delegate backend; the
+  // accessor returns null otherwise and the components hide themselves.
+  const delegateConfig = useMemo(
+    () => (backendKind === 'delegate' ? gateway.getDelegateHttpConfig() : null),
+    [backendKind, gateway, gatewayEpoch],
+  );
+  const worktreeJid = controller.sessionKey ?? 'delegate:main';
   const headerContextLabel = formatSessionContextLabel({
     totalTokens: backendKind === 'hermes' ? undefined : currentLabel?.totalTokens,
     totalTokensFresh: backendKind === 'hermes' ? false : currentLabel?.totalTokensFresh,
@@ -569,6 +579,12 @@ export function ChatScreenLayout({ controller, insets, onOpenSidebar, onAddGatew
         onSelectSession={handleOpenChildSession}
       />
 
+      <ChatWorktreeHeader
+        jid={worktreeJid}
+        config={delegateConfig}
+        enabled={backendKind === 'delegate' && !!controller.sessionKey}
+      />
+
       {!!controller.compactionNotice && <CompactionBanner message={controller.compactionNotice} />}
       {controller.showDebug && <DebugOverlay logs={controller.debugLog} />}
 
@@ -617,6 +633,12 @@ export function ChatScreenLayout({ controller, insets, onOpenSidebar, onAddGatew
             slashSuggestions={controller.slashSuggestions}
             slashSuggestionsMaxHeight={slashSuggestionsMaxHeight}
             theme={theme}
+          />
+
+          <ChatProgressStrip
+            jid={worktreeJid}
+            config={delegateConfig}
+            isRunActive={backendKind === 'delegate' && controller.runActive}
           />
 
           <ChatComposerPane

@@ -76,6 +76,10 @@ type Props = {
   voiceInputActive?: boolean;
   voiceInputDisabled?: boolean;
   voiceInputLevel?: number;
+  /** Optional testID on the TextInput element. */
+  inputTestID?: string;
+  /** Optional testID on the primary send/abort button. */
+  sendButtonTestID?: string;
 };
 
 function StopGlyph({ color }: { color: string }): React.JSX.Element {
@@ -95,7 +99,7 @@ function SendArrowGlyph({ color }: { color: string }): React.JSX.Element {
   );
 }
 
-export function ChatComposer({ value, placeholder, animatedPlaceholder = false, editable, canSend, onChangeText, onSend, onPickImage, onTakePhoto, onChooseFile, onCommandPress, attachDisabled, commandDisabled = false, thinkingLevel, thinkingLevelOptions, onSelectThinkingLevel, modelLabel, onModelPress, onWebSearchPress, onPromptPress, isSending = false, onAbort, bottomPadding, bottomOffset, composerRef, onFocus, onBlur, onVoiceInputPress, showVoiceInput = false, voiceInputActive = false, voiceInputDisabled = false, voiceInputLevel = 0 }: Props): React.JSX.Element {
+export function ChatComposer({ value, placeholder, animatedPlaceholder = false, editable, canSend, onChangeText, onSend, onPickImage, onTakePhoto, onChooseFile, onCommandPress, attachDisabled, commandDisabled = false, thinkingLevel, thinkingLevelOptions, onSelectThinkingLevel, modelLabel, onModelPress, onWebSearchPress, onPromptPress, isSending = false, onAbort, bottomPadding, bottomOffset, composerRef, onFocus, onBlur, onVoiceInputPress, showVoiceInput = false, voiceInputActive = false, voiceInputDisabled = false, voiceInputLevel = 0, inputTestID, sendButtonTestID }: Props): React.JSX.Element {
   const inputRef = useRef<TextInput>(null);
   const inputContentHeightRef = useRef(0);
   const scrollFrameRef = useRef<number | null>(null);
@@ -355,6 +359,7 @@ export function ChatComposer({ value, placeholder, animatedPlaceholder = false, 
       )}
       <TextInput
         ref={inputRef}
+        testID={inputTestID}
         style={[styles.input, wallpaperActive && styles.inputWallpaper]}
         value={value}
         placeholder={animatedPlaceholder && !value ? undefined : placeholder}
@@ -437,6 +442,7 @@ export function ChatComposer({ value, placeholder, animatedPlaceholder = false, 
       {inputField}
       {voiceButton}
       <CircleButton
+        testID={sendButtonTestID}
         icon={sendButtonIcon}
         onPress={handlePrimaryAction}
         disabled={sendButtonDisabled}

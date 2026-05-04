@@ -269,7 +269,7 @@ export function LogScreen(): React.JSX.Element {
   }, [autoFollow, filteredEntries.length, scrollToBottom]);
 
   return (
-    <View style={styles.root}>
+    <View testID="log" style={styles.root}>
       {error ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorTitle}>{t('Failed to fetch logs')}</Text>

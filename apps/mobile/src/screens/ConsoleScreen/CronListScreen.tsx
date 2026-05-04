@@ -22,6 +22,7 @@ import type { ConsoleStackParamList } from './ConsoleTab';
 import { analyticsEvents } from '../../services/analytics/events';
 import { StorageService } from '../../services/storage';
 import { fetchAllCronJobs } from './cronData';
+import { useBackendAwareCron } from './backendAwareCronDispatch';
 
 type CronListNavigation = NativeStackNavigationProp<ConsoleStackParamList, 'CronList'>;
 type Tab = 'runs' | 'jobs';
@@ -51,6 +52,7 @@ function RunsTab({ colors }: {
   colors: ReturnType<typeof useAppTheme>['theme']['colors'];
 }) {
   const { gateway, gatewayEpoch, currentAgentId, requestChatWithInput } = useAppContext();
+  const cron = useBackendAwareCron(gateway);
   const { t } = useTranslation('console');
   const navigation = useNavigation<CronListNavigation>();
   const [runs, setRuns] = useState<CronRunLogEntry[]>([]);
@@ -65,7 +67,7 @@ function RunsTab({ colors }: {
     if (mode === 'refresh') setRefreshing(true);
     try {
       const [result, jobs] = await Promise.all([
-        gateway.listCronRuns({ scope: 'all', limit: 50, sortDir: 'desc' }),
+        cron.listRuns({ scope: 'all', limit: 50, sortDir: 'desc' }),
         fetchAllCronJobs(gateway, currentAgentId),
       ]);
       const allowedJobIds = new Set(jobs.map((job) => job.id));
@@ -81,7 +83,7 @@ function RunsTab({ colors }: {
       if (mode === 'initial') setLoading(false);
       if (mode === 'refresh') setRefreshing(false);
     }
-  }, [currentAgentId, gateway, gatewayEpoch]);
+  }, [cron, currentAgentId, gateway, gatewayEpoch]);
 
   useFocusEffect(useCallback(() => {
     load(hasLoaded ? 'background' : 'initial').catch(() => {});
@@ -200,6 +202,7 @@ function RunsTab({ colors }: {
                     const errorDetail = item.error ? ` Error: ${item.error}` : '';
                     const prompt = `Cron job "${jobLabel}" (ID: ${item.jobId}) failed.${errorDetail} Please help me investigate why this cron job is failing and suggest a fix.`;
                     navigation.popToTop();
+                    // poll-interval-ok: microtask trampoline (wait for popToTop before Chat input focus)
                     setTimeout(() => requestChatWithInput(prompt), 50);
                   }}
                 >
@@ -338,7 +341,11 @@ function JobsTab({ colors }: {
         const nextRunText = item.enabled && item.state.nextRunAtMs ? formatRelativeTime(item.state.nextRunAtMs) : '—';
 
         return (
-          <Card style={styles.card} onPress={() => navigation.navigate('CronDetail', { jobId: item.id })}>
+          <Card
+            testID={`cron-list-row-${item.id}`}
+            style={styles.card}
+            onPress={() => navigation.navigate('CronDetail', { jobId: item.id })}
+          >
             <View style={styles.cardHead}>
               <Text style={styles.cardTitle} numberOfLines={1}>{item.name}</Text>
               <View style={styles.enabledWrap}>
@@ -415,6 +422,7 @@ export function CronListScreen(): React.JSX.Element {
     () => (
       <HeaderActionButton
         icon={Plus}
+        testID="cron-list-create-button"
         onPress={() => {
           analyticsEvents.cronCreateTapped({ source: 'cron_header' });
           navigation.navigate('CronWizard');
@@ -433,7 +441,7 @@ export function CronListScreen(): React.JSX.Element {
   });
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }} testID="cron-list">
       <SegmentedTabs tabs={cronTabs} active={tab} onSwitch={setTab} />
       {tab === 'runs'
         ? <RunsTab colors={theme.colors} />

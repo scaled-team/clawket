@@ -8,21 +8,28 @@ type Props = {
   disabled?: boolean;
   style?: ViewStyle | (ViewStyle | false | undefined)[];
   children: React.ReactNode;
+  testID?: string;
 };
 
-export function Card({ onPress, disabled, style, children }: Props): React.JSX.Element {
+export function Card({ onPress, disabled, style, children, testID }: Props): React.JSX.Element {
   const { theme } = useAppTheme();
   const { colors } = theme;
   const cardStyle = [styles.card, { backgroundColor: colors.surface }, style];
 
   if (onPress) {
     return (
-      <TouchableOpacity style={cardStyle} onPress={onPress} disabled={disabled} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={cardStyle}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.7}
+        testID={testID}
+      >
         {children}
       </TouchableOpacity>
     );
   }
-  return <View style={cardStyle}>{children}</View>;
+  return <View style={cardStyle} testID={testID}>{children}</View>;
 }
 
 const styles = StyleSheet.create({

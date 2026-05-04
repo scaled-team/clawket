@@ -142,6 +142,7 @@ function PromptPickerContent({
         const ref = rowRefs.current.get(firstId);
         if (!ref) return;
         ref.openRight();
+        // poll-interval-ok: input debounce (preview swipe hint auto-close)
         setTimeout(() => ref.close(), 600);
       }, 400);
     })();

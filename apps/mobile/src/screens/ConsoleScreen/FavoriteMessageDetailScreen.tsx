@@ -159,7 +159,7 @@ export function FavoriteMessageDetailScreen(): React.JSX.Element {
 
   if (!favorite) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <View testID="favorite-message-detail" style={[styles.root, { backgroundColor: colors.background }]}>
         <EmptyState icon="⭐" title={t("No messages")} />
       </View>
     );
@@ -169,6 +169,7 @@ export function FavoriteMessageDetailScreen(): React.JSX.Element {
 
   return (
     <ScrollView
+      testID="favorite-message-detail"
       style={[styles.root, { backgroundColor: colors.background }]}
       contentContainerStyle={createCardContentStyle()}
     >

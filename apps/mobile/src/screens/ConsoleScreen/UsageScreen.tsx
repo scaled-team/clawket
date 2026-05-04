@@ -1,12 +1,22 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Linking,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Card, EmptyState, LoadingState, createCardContentStyle } from '../../components/ui';
+import { useAppContext } from '../../contexts/AppContext';
+import { fetchUserUsage, postUsageTopup } from '../../services/delegate-http-adapter';
 import { SvgBarChart, SvgRingChart } from '../../components/charts';
 import type { BarDataPoint, RingSegment } from '../../components/charts';
 import { useTranslation } from 'react-i18next';
-import { useAppContext } from '../../contexts/AppContext';
 import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader';
 import { loadGatewayUsageDashboardBundle } from '../../services/gateway-usage-dashboard';
 import { resolveUsageCostSummaryDisplay, resolveUsageSessionCostLabel } from '../../services/usage-cost-display';
@@ -112,9 +122,30 @@ function useUsageDashboard(active: boolean): DashboardState {
   return { rangeKey, setRangeKey, range, usageResult, costSummary, loading, error };
 }
 
+type UserBalance = {
+  balance: number;
+  used: number;
+  limit: number | null;
+  periodEnd?: string;
+};
+
+type TopupPack = { amount: number; label: string };
+
+const TOPUP_PACKS: TopupPack[] = [
+  { amount: 500, label: '100K tokens ($5)' },
+  { amount: 2500, label: '500K tokens ($25)' },
+  { amount: 10000, label: '2M tokens ($100)' },
+];
+
 export function UsageScreen(): React.JSX.Element {
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
+  const { t: tCommon } = useTranslation('common');
+  const { gateway } = useAppContext();
+  const [balance, setBalance] = useState<UserBalance | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const [topupBusy, setTopupBusy] = useState(false);
   const dateRanges = useMemo<DateRangeItem[]>(() => [
     { label: t('Today'), key: 'today' },
     { label: t('Yesterday'), key: 'yesterday' },
@@ -134,6 +165,55 @@ export function UsageScreen(): React.JSX.Element {
   });
 
   const { rangeKey, setRangeKey, range, usageResult, costSummary, loading, error } = useUsageDashboard(isFocused);
+
+  const loadBalance = useCallback(async () => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) return;
+    try {
+      const b = await fetchUserUsage(dc);
+      if (b) {
+        setBalance({
+          balance: b.balance ?? 0,
+          used: b.used ?? 0,
+          limit: b.limit ?? null,
+          periodEnd: b.periodEnd,
+        });
+      }
+      setBalanceError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load balance';
+      setBalanceError(message);
+    }
+  }, [gateway]);
+
+  useEffect(() => {
+    if (!isFocused) return;
+    void loadBalance();
+  }, [isFocused, loadBalance]);
+
+  const handleTopupPack = useCallback(
+    async (pack: TopupPack) => {
+      const dc = gateway.getDelegateConfig();
+      if (!dc || topupBusy) return;
+      setTopupBusy(true);
+      try {
+        const result = await postUsageTopup(dc, pack.amount);
+        setTopupOpen(false);
+        if (result.checkoutUrl) {
+          await Linking.openURL(result.checkoutUrl);
+        } else {
+          Alert.alert(tCommon('Success'), t('Top up applied.'));
+          await loadBalance();
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : t('Failed to top up');
+        Alert.alert(tCommon('Error'), message);
+      } finally {
+        setTopupBusy(false);
+      }
+    },
+    [gateway, loadBalance, t, tCommon, topupBusy],
+  );
 
   const messages = usageResult?.aggregates?.messages;
   const tools = usageResult?.aggregates?.tools;
@@ -282,6 +362,33 @@ export function UsageScreen(): React.JSX.Element {
             </Card>
           ) : null}
 
+          {balance ? (
+            <Card style={styles.balanceCard} testID="usage-balance">
+              <View style={styles.balanceHeader}>
+                <Text style={styles.balanceLabel}>{t('User balance')}</Text>
+                <TouchableOpacity
+                  testID="usage-topup-button"
+                  onPress={() => setTopupOpen(true)}
+                  style={styles.topupButton}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.topupButtonText}>{t('Top up')}</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.balanceValue} testID="usage-balance-remaining">
+                {formatTokens(balance.balance)} {t('tokens remaining')}
+              </Text>
+              {balance.periodEnd ? (
+                <Text style={styles.balancePeriod}>
+                  {t('Period ends {{date}}', { date: balance.periodEnd })}
+                </Text>
+              ) : null}
+              {balanceError ? (
+                <Text style={styles.balanceError}>{balanceError}</Text>
+              ) : null}
+            </Card>
+          ) : null}
+
           <View style={styles.summaryGrid}>
             <Card style={styles.summaryCard}>
               <Text style={styles.summaryValue}>{costSummaryDisplay.valueLabel}</Text>
@@ -396,6 +503,38 @@ export function UsageScreen(): React.JSX.Element {
           </Card>
         </ScrollView>
       )}
+
+      <Modal
+        visible={topupOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTopupOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="usage-topup-modal">
+            <Text style={styles.modalTitle}>{t('Choose a pack')}</Text>
+            {TOPUP_PACKS.map((pack) => (
+              <TouchableOpacity
+                key={pack.amount}
+                testID={`usage-topup-pack-${pack.amount}`}
+                disabled={topupBusy}
+                onPress={() => handleTopupPack(pack)}
+                style={[styles.modalPack, topupBusy && styles.modalPackDisabled]}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalPackText}>{pack.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              onPress={() => setTopupOpen(false)}
+              style={styles.modalCancel}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCancelText}>{tCommon('Cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -559,6 +698,98 @@ function createStyles(colors: ReturnType<typeof useAppTheme>['theme']['colors'])
       fontSize: FontSize.md,
       color: colors.textMuted,
       paddingVertical: Space.sm,
+    },
+    balanceCard: {
+      marginTop: Space.lg,
+      marginBottom: Space.sm,
+      padding: Space.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    balanceHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: Space.xs,
+    },
+    balanceLabel: {
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+      color: colors.textMuted,
+    },
+    balanceValue: {
+      fontSize: FontSize.lg,
+      fontWeight: FontWeight.bold,
+      color: colors.text,
+    },
+    balancePeriod: {
+      marginTop: Space.xs,
+      fontSize: FontSize.sm,
+      color: colors.textMuted,
+    },
+    balanceError: {
+      marginTop: Space.xs,
+      fontSize: FontSize.sm,
+      color: colors.error,
+    },
+    topupButton: {
+      paddingHorizontal: Space.md,
+      paddingVertical: Space.sm - 2,
+      borderRadius: Radius.md,
+      backgroundColor: colors.primary,
+    },
+    topupButtonText: {
+      color: colors.primaryText,
+      fontSize: FontSize.sm,
+      fontWeight: FontWeight.semibold,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: Space.lg,
+    },
+    modalCard: {
+      width: '100%',
+      maxWidth: 360,
+      backgroundColor: colors.surface,
+      borderRadius: Radius.lg,
+      padding: Space.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: FontSize.lg,
+      fontWeight: FontWeight.bold,
+      color: colors.text,
+      marginBottom: Space.md,
+    },
+    modalPack: {
+      paddingVertical: Space.md,
+      paddingHorizontal: Space.md,
+      borderRadius: Radius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: Space.sm,
+      backgroundColor: colors.background,
+    },
+    modalPackDisabled: { opacity: 0.5 },
+    modalPackText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: colors.text,
+    },
+    modalCancel: {
+      paddingVertical: Space.md,
+      alignItems: 'center',
+      marginTop: Space.xs,
+    },
+    modalCancelText: {
+      fontSize: FontSize.base,
+      fontWeight: FontWeight.semibold,
+      color: colors.textMuted,
     },
   });
 }

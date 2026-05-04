@@ -117,7 +117,7 @@ export function OpenClawDiagnosticsScreen(): React.JSX.Element {
 
   if (mode === 'fix' && initialFixError) {
     return (
-      <View style={styles.emptyWrap}>
+      <View testID="open-claw-diagnostics" style={styles.emptyWrap}>
         <EmptyState
           icon="!"
           title={t('OpenClaw Auto Fix')}
@@ -129,7 +129,7 @@ export function OpenClawDiagnosticsScreen(): React.JSX.Element {
 
   if (mode === 'fix' && initialFixResult) {
     return (
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView testID="open-claw-diagnostics" contentContainerStyle={styles.content}>
         <View style={styles.heroSection}>
           <View style={styles.doctorSummaryRow}>
             {initialFixResult.ok
@@ -155,7 +155,7 @@ export function OpenClawDiagnosticsScreen(): React.JSX.Element {
 
   if (!doctorResult && doctorError) {
     return (
-      <View style={styles.emptyWrap}>
+      <View testID="open-claw-diagnostics" style={styles.emptyWrap}>
         <EmptyState
           icon="!"
           title={t('Diagnostics')}
@@ -167,7 +167,7 @@ export function OpenClawDiagnosticsScreen(): React.JSX.Element {
 
   if (!doctorResult) {
     return (
-      <View style={styles.emptyWrap}>
+      <View testID="open-claw-diagnostics" style={styles.emptyWrap}>
         <EmptyState
           icon="!"
           title={t('Diagnostics')}
@@ -178,7 +178,7 @@ export function OpenClawDiagnosticsScreen(): React.JSX.Element {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView testID="open-claw-diagnostics" contentContainerStyle={styles.content}>
       <View style={styles.heroSection}>
         <View style={styles.doctorSummaryRow}>
           {doctorResult.ok

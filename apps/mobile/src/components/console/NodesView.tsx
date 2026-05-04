@@ -510,6 +510,7 @@ export function NodesView({
 
   const renderNodeCard = useCallback((node: NodeInfo) => (
     <TouchableOpacity
+      testID={`nodes-row-${node.nodeId}`}
       activeOpacity={0.82}
       onPress={() => onOpenNode(node)}
       onLongPress={() => handleNodeLongPress(node)}

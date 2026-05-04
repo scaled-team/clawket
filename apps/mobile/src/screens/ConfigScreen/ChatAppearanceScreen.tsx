@@ -361,9 +361,9 @@ export function ChatAppearanceScreen(): React.JSX.Element {
   const canIncreaseOpacity = draftAppearance.bubbles.opacity < OPACITY_STEPS[OPACITY_STEPS.length - 1];
 
   return (
-    <ScrollView contentContainerStyle={createCardContentStyle()}>
+    <ScrollView testID="chat-appearance" contentContainerStyle={createCardContentStyle()}>
       <Text style={styles.sectionHeader}>{t('Preview')}</Text>
-      <View style={styles.previewCard}>
+      <View testID="chat-appearance-preview" style={styles.previewCard}>
         <ChatAppearancePreviewCard
           appearance={draftSnapshot.appearance}
           backgroundImageUri={previewBackgroundUri}

@@ -317,7 +317,7 @@ export function ChatTab(): React.JSX.Element {
 
   return (
     <ChatControllerProvider controller={controller}>
-      <View style={{ flex: 1, marginBottom: -tabBarHeight }}>
+      <View testID="tab-Chat-body" style={{ flex: 1, marginBottom: -tabBarHeight }}>
         <ChatDrawer.Navigator
           drawerContent={renderDrawerContent}
           screenOptions={screenOptions}

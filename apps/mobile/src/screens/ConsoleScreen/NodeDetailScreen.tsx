@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,15 +17,17 @@ export function NodeDetailScreen(): React.JSX.Element {
   const route = useRoute<NodeDetailRoute>();
 
   return (
-    <NodeDetailView
-      gateway={gateway}
-      nodeId={route.params.nodeId}
-      displayName={route.params.displayName}
-      nodeCapabilityToggles={nodeCapabilityToggles}
-      onNodeCapabilityTogglesChange={onNodeCapabilityTogglesChange}
-      topInset={insets.top}
-      onBack={() => navigation.goBack()}
-      dismissStyle="close"
-    />
+    <View testID="node-detail" style={{ flex: 1 }}>
+      <NodeDetailView
+        gateway={gateway}
+        nodeId={route.params.nodeId}
+        displayName={route.params.displayName}
+        nodeCapabilityToggles={nodeCapabilityToggles}
+        onNodeCapabilityTogglesChange={onNodeCapabilityTogglesChange}
+        topInset={insets.top}
+        onBack={() => navigation.goBack()}
+        dismissStyle="close"
+      />
+    </View>
   );
 }

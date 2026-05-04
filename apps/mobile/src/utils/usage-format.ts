@@ -46,11 +46,13 @@ export function formatCost(n: number, decimals = 2): string {
 }
 
 export function formatDayLabel(dateStr: string): string {
-  // dateStr = "YYYY-MM-DD"
+  // dateStr = "YYYY-MM-DD" — construct as a LOCAL date so toLocaleDateString doesn't
+  // shift the day backward in negative-offset timezones (e.g. PDT/UTC-7, where a
+  // UTC-constructed 2026-04-16 renders as "Apr 15").
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
   if (!match) return dateStr;
   const [, y, m, d] = match;
-  const date = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
   if (Number.isNaN(date.valueOf())) return dateStr;
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

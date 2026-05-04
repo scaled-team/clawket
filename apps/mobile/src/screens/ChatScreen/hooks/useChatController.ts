@@ -2418,6 +2418,12 @@ export function useChatController({
     setInput,
     composerRef,
     isSending,
+    // `runActive` is an alias for `isSending` exposed for the Phase 2
+    // progress strip. It signals that an agent run is in flight so the
+    // strip can start polling `/api/agent/channel/progress` at 2.5s and
+    // stop when the run completes. Mirrors the existing pending/streaming
+    // signal without introducing a new lifecycle.
+    runActive: isSending,
     sessionKey: history.sessionKey,
     sessions: history.sessions,
     agentAvatarUri: agentIdentity.avatarUri,

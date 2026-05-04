@@ -105,6 +105,7 @@ export function DiscoverDetailScreen(): React.JSX.Element {
       location: 'detail',
     });
     navigation.popToTop();
+    // poll-interval-ok: microtask trampoline (wait for popToTop navigation to complete before Chat input focus)
     setTimeout(() => requestChatWithInput(resolved.installPrompt), 50);
   };
 

@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { View } from 'react-native';
 import { RefreshCw } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -86,23 +87,27 @@ export function ModelsScreen(): React.JSX.Element {
   // React element for whichever backend is active. This keeps ModelsScreen
   // free of screen-level `backend === 'hermes'` checks — all backend
   // decisions flow through `src/services/gateway-backends.ts`.
-  return selectByBackend(config, {
-    openclaw: (
-      <ModelsView
-        gateway={gateway}
-        topInset={0}
-        onBack={() => navigation.goBack()}
-        modelConfig={modelConfig}
-        hideHeader
-      />
-    ),
-    hermes: (
-      <HermesModelSelectionView
-        gateway={gateway}
-        topInset={0}
-        onBack={() => navigation.goBack()}
-        hideHeader
-      />
-    ),
-  });
+  return (
+    <View testID="models" style={{ flex: 1 }}>
+      {selectByBackend(config, {
+        openclaw: (
+          <ModelsView
+            gateway={gateway}
+            topInset={0}
+            onBack={() => navigation.goBack()}
+            modelConfig={modelConfig}
+            hideHeader
+          />
+        ),
+        hermes: (
+          <HermesModelSelectionView
+            gateway={gateway}
+            topInset={0}
+            onBack={() => navigation.goBack()}
+            hideHeader
+          />
+        ),
+      })}
+    </View>
+  );
 }

@@ -31,6 +31,7 @@ import type { CronJob, CronJobCreate, CronJobPatch, CronSchedule } from '../../t
 import type { ConsoleStackParamList } from './ConsoleTab';
 import { buildCronWizardSaveSpec } from './cronWizardSaveSpec';
 import { findCronJobById } from './cronData';
+import { useBackendAwareCron } from './backendAwareCronDispatch';
 
 type WizardNavigation = NativeStackNavigationProp<ConsoleStackParamList, 'CronWizard'>;
 type WizardRoute = RouteProp<ConsoleStackParamList, 'CronWizard'>;
@@ -295,6 +296,7 @@ function getTemplateInitialTaskName(key: string, t: (k: string) => string): stri
 
 export function CronWizardScreen(): React.JSX.Element {
   const { gateway, currentAgentId } = useAppContext();
+  const cron = useBackendAwareCron(gateway);
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
   const navigation = useNavigation<WizardNavigation>();
@@ -371,7 +373,7 @@ export function CronWizardScreen(): React.JSX.Element {
           delivery: saveSpec.delivery,
           agentId: saveSpec.agentId ?? null,
         } as unknown as CronJobPatch;
-        await gateway.updateCronJob(jobId, patchData);
+        await cron.updateJob(jobId, patchData);
         Alert.alert(t('common:Saved'), t('Cron job updated.'));
         navigation.goBack();
       } else {
@@ -385,7 +387,7 @@ export function CronWizardScreen(): React.JSX.Element {
           payload: saveSpec.payload,
           delivery: saveSpec.delivery,
         };
-        const created = await gateway.addCronJob(createData);
+        const created = await cron.createJob(createData);
         Alert.alert(t('common:Saved'), t('Cron job created.'));
         navigation.replace('CronDetail', { jobId: created.id });
       }
@@ -395,7 +397,7 @@ export function CronWizardScreen(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [currentAgentId, editMode, form, gateway, jobId, navigation, t]);
+  }, [cron, currentAgentId, editMode, form, jobId, navigation, t]);
 
   useEffect(() => {
     handleSaveRef.current = () => void handleSave();

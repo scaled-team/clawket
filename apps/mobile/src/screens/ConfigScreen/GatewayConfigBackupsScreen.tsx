@@ -143,7 +143,7 @@ export function GatewayConfigBackupsScreen(): React.JSX.Element {
   }
 
   return (
-    <ScrollView contentContainerStyle={[createCardContentStyle(), backups.length === 0 ? { flexGrow: 1 } : null]}>
+    <ScrollView testID="gateway-config-backups" contentContainerStyle={[createCardContentStyle(), backups.length === 0 ? { flexGrow: 1 } : null]}>
       {backups.length > 0 ? (
         <Text style={styles.sectionTitle}>{t('Choose the backup version you want to restore')}</Text>
       ) : null}

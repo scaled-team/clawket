@@ -96,7 +96,7 @@ export function ToolsScreen(): React.JSX.Element {
   });
 
   return (
-    <View style={styles.root}>
+    <View testID="tools" style={styles.root}>
       <SegmentedTabs tabs={toolsTabs} active={tab} onSwitch={setTab} />
 
       {tab === 'settings' ? (

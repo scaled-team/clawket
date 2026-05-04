@@ -34,6 +34,12 @@ import {
 } from '../../utils/cron';
 import type { ConsoleStackParamList } from './ConsoleTab';
 import { findCronJobById } from './cronData';
+import { useBackendAwareCron } from './backendAwareCronDispatch';
+// CronRunList is the shared presentational component for future Delegate-specific
+// detail renders. The current detail screen keeps the rich OpenClaw inline
+// rendering so we don't regress the Hermes/OpenClaw UX.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { CronRunList as _CronRunList } from './components/CronRunList';
 
 type CronDetailNavigation = NativeStackNavigationProp<ConsoleStackParamList, 'CronDetail'>;
 type CronDetailRoute = RouteProp<ConsoleStackParamList, 'CronDetail'>;
@@ -75,6 +81,7 @@ function payloadPreview(job: CronJob): string {
 
 export function CronDetailScreen(): React.JSX.Element {
   const { gateway, currentAgentId, requestChatWithInput } = useAppContext();
+  const cron = useBackendAwareCron(gateway);
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
   const insets = useSafeAreaInsets();
@@ -97,7 +104,7 @@ export function CronDetailScreen(): React.JSX.Element {
   const [deleting, setDeleting] = useState(false);
 
   const loadRuns = useCallback(async (offset: number, append: boolean) => {
-    const page = await gateway.listCronRuns({
+    const page = await cron.listRuns({
       scope: 'job',
       id: jobId,
       limit: RUNS_PAGE_SIZE,
@@ -107,7 +114,7 @@ export function CronDetailScreen(): React.JSX.Element {
     setRuns((prev) => (append ? [...prev, ...page.entries] : page.entries));
     setRunsHasMore(page.hasMore);
     setRunsNextOffset(page.nextOffset);
-  }, [gateway, jobId]);
+  }, [cron, jobId]);
 
   const loadDetail = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'initial') setLoading(true);
@@ -154,7 +161,7 @@ export function CronDetailScreen(): React.JSX.Element {
     const nextEnabled = !job.enabled;
     setTogglingEnabled(true);
     try {
-      const updated = await gateway.updateCronJob(job.id, { enabled: nextEnabled });
+      const updated = await cron.updateJob(job.id, { enabled: nextEnabled });
       setJob(updated);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to update status';
@@ -162,13 +169,13 @@ export function CronDetailScreen(): React.JSX.Element {
     } finally {
       setTogglingEnabled(false);
     }
-  }, [gateway, job, togglingEnabled]);
+  }, [cron, job, t, togglingEnabled]);
 
   const handleRunNow = useCallback(async () => {
     if (!job || running) return;
     setRunning(true);
     try {
-      await gateway.runCronJob(job.id, 'force');
+      await cron.runJob(job.id, 'force');
       Alert.alert(t('Run requested'), t('Cron job has been triggered.'));
       await loadDetail('refresh');
     } catch (err: unknown) {
@@ -177,13 +184,13 @@ export function CronDetailScreen(): React.JSX.Element {
     } finally {
       setRunning(false);
     }
-  }, [gateway, job, loadDetail, running]);
+  }, [cron, job, loadDetail, running, t]);
 
   const deleteJob = useCallback(async () => {
     if (!job || deleting) return;
     setDeleting(true);
     try {
-      await gateway.removeCronJob(job.id);
+      await cron.deleteJob(job.id);
       navigation.goBack();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete cron job';
@@ -191,7 +198,7 @@ export function CronDetailScreen(): React.JSX.Element {
     } finally {
       setDeleting(false);
     }
-  }, [deleting, gateway, job, navigation]);
+  }, [cron, deleting, job, navigation, t]);
 
   const handleDeletePress = useCallback(() => {
     if (!job || deleting) return;
@@ -229,7 +236,7 @@ export function CronDetailScreen(): React.JSX.Element {
 
   if (loading) {
     return (
-      <View style={styles.root}>
+      <View testID="cron-detail" style={styles.root}>
         <ScreenHeader title="" topInset={insets.top} onBack={() => navigation.goBack()} dismissStyle="close" />
         <LoadingState message={t('Loading cron job...')} />
       </View>
@@ -238,7 +245,7 @@ export function CronDetailScreen(): React.JSX.Element {
 
   if (error || !job) {
     return (
-      <View style={styles.root}>
+      <View testID="cron-detail" style={styles.root}>
         <ScreenHeader title="" topInset={insets.top} onBack={() => navigation.goBack()} dismissStyle="close" />
         <View style={styles.centerState}>
           <Text style={styles.errorTitle}>{t('Failed to load cron job')}</Text>
@@ -252,7 +259,7 @@ export function CronDetailScreen(): React.JSX.Element {
   }
 
   return (
-    <View style={styles.root}>
+    <View testID="cron-detail" style={styles.root}>
       <ScreenHeader
         title=""
         topInset={insets.top}
@@ -268,6 +275,7 @@ export function CronDetailScreen(): React.JSX.Element {
               buttonSize={40}
             />
             <HeaderActionButton
+              testID="cron-detail-run-now"
               icon={Play}
               onPress={() => handleRunNow()}
               disabled={running || deleting}
@@ -276,6 +284,7 @@ export function CronDetailScreen(): React.JSX.Element {
               buttonSize={40}
             />
             <HeaderActionButton
+              testID="cron-editor-delete"
               icon={Trash2}
               onPress={() => handleDeletePress()}
               disabled={deleting}
@@ -389,7 +398,7 @@ export function CronDetailScreen(): React.JSX.Element {
           </View>
         </View>
 
-        <View style={styles.sectionCard}>
+        <View style={styles.sectionCard} testID="cron-detail-run-history">
           <Text style={styles.sectionTitle}>{t('Run History')}</Text>
 
           {runsError ? (
@@ -409,8 +418,13 @@ export function CronDetailScreen(): React.JSX.Element {
               const status = entry.status;
               const statusColor = runStatusColor(status, theme.colors);
               const deliveryText = deliveryStatusText(entry.deliveryStatus, entry.delivered, t);
+              const rowKey = `${entry.ts}_${entry.jobId}_${entry.runAtMs ?? 0}`;
               return (
-                <View key={`${entry.ts}_${entry.jobId}_${entry.runAtMs ?? 0}`} style={styles.runCard}>
+                <View
+                  key={rowKey}
+                  testID={`cron-run-row-${entry.runAtMs ?? entry.ts}`}
+                  style={styles.runCard}
+                >
                   <View style={styles.runHead}>
                     <Text style={styles.runTime}>{formatTimestamp(entry.ts)}</Text>
                     <View style={[styles.runStatusBadge, { borderColor: statusColor }]}>
@@ -448,6 +462,7 @@ export function CronDetailScreen(): React.JSX.Element {
                           const errorDetail = entry.error ? ` Error: ${entry.error}` : '';
                           const prompt = `Cron job "${jobLabel}" (ID: ${job.id}) failed.${errorDetail} Please help me investigate why this cron job is failing and suggest a fix.`;
                           navigation.popToTop();
+                          // poll-interval-ok: microtask trampoline (wait for popToTop before Chat input focus)
                           setTimeout(() => requestChatWithInput(prompt), 50);
                         }}
                       >

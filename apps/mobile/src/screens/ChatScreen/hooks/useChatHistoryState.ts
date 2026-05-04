@@ -178,6 +178,7 @@ export function useChatHistoryState({
   const cacheHydrationSessionKeyRef = useRef<string | null>(null);
   const messagesRef = useRef<UiMessage[]>(messages);
   const historyLoadedRef = useRef(historyLoaded);
+  const loadHistoryRef = useRef<((key: string, limit?: number) => Promise<number>) | null>(null);
   const previousGatewayScopeRef = useRef<string | null>(gatewayConfigId);
   const localOlderMessagesRef = useRef<UiMessage[]>([]);
   const localHistoryPaging = useChatLocalHistoryPaging({
@@ -193,6 +194,9 @@ export function useChatHistoryState({
   useEffect(() => {
     historyLoadedRef.current = historyLoaded;
   }, [historyLoaded]);
+
+  // Sync loadHistoryRef so the startup restore effects (defined before loadHistory)
+  // can still trigger a network fetch when the local cache is empty.
 
   useEffect(() => {
     if (previousGatewayScopeRef.current === gatewayConfigId) return;
@@ -266,13 +270,18 @@ export function useChatHistoryState({
     if (sessionKeyRef.current) return;
     sessionKeyRef.current = initialPreview.sessionKey;
     cacheHydrationSessionKeyRef.current = initialPreview.sessionKey;
-    void restoreCachedMessages(initialPreview.sessionKey, {
+    const previewKey = initialPreview.sessionKey;
+    void restoreCachedMessages(previewKey, {
       clearWhenEmpty: true,
       sessionId: initialPreview.sessionId,
     }).then((restored) => {
       if (restored) {
         setHistoryLoaded(true);
+        return;
       }
+      // No cached messages — fetch from network so historyLoaded flips true
+      // and the chat header stops saying "Syncing conversation…".
+      void loadHistoryRef.current?.(previewKey, HISTORY_PAGE_SIZE);
     });
   }, [initialPreview, restoreCachedMessages, sessionKeyRef]);
 
@@ -318,9 +327,14 @@ export function useChatHistoryState({
         clearWhenEmpty: true,
         sessionId: previewSession?.sessionId,
       });
-      if (cancelled || !restored) return;
-      setHistoryLoaded(true);
-      dbg(`cache: startup preview restored for key=${previewKey}`);
+      if (cancelled) return;
+      if (restored) {
+        setHistoryLoaded(true);
+        dbg(`cache: startup preview restored for key=${previewKey}`);
+        return;
+      }
+      // No cached messages — fetch from network so historyLoaded flips true.
+      void loadHistoryRef.current?.(previewKey, HISTORY_PAGE_SIZE);
     };
 
     void restoreStartupPreview();
@@ -754,6 +768,10 @@ export function useChatHistoryState({
       }
     }
   }, [dbg, gateway, sessionKeyRef, t]);
+
+  useEffect(() => {
+    loadHistoryRef.current = loadHistory;
+  }, [loadHistory]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

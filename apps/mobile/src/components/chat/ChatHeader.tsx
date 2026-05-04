@@ -188,6 +188,7 @@ export function ChatHeader({
     };
 
     if (isTyping) {
+      // poll-interval-ok: input debounce (typing indicator settle)
       typingDelayRef.current = setTimeout(performSwitch, 300);
     } else {
       performSwitch();

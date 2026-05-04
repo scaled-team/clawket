@@ -8,6 +8,7 @@ type Props = {
   onPress: () => void;
   disabled?: boolean;
   minWidth?: number;
+  testID?: string;
 };
 
 export function HeaderTextAction({
@@ -15,6 +16,7 @@ export function HeaderTextAction({
   onPress,
   disabled = false,
   minWidth = 56,
+  testID,
 }: Props): React.JSX.Element {
   const { theme } = useAppTheme();
 
@@ -23,6 +25,7 @@ export function HeaderTextAction({
       onPress={onPress}
       disabled={disabled}
       hitSlop={10}
+      testID={testID}
       style={({ pressed }) => [
         styles.pressable,
         { minWidth },

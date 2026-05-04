@@ -672,6 +672,7 @@ export function ChatHistoryScreen(): React.JSX.Element {
       const initialQuery = searchText.trim() || undefined;
       return (
         <TouchableOpacity
+          testID={`chat-history-row-${meta.storageKey}`}
           style={[
             styles.sessionCard,
             { backgroundColor: colors.surface, borderColor: colors.border },
@@ -847,6 +848,7 @@ export function ChatHistoryScreen(): React.JSX.Element {
 
       return (
         <TouchableOpacity
+          testID={`chat-history-favorite-${item.favoriteKey}`}
           style={[
             styles.favoriteCard,
             { backgroundColor: colors.surface, borderColor: colors.border },
@@ -932,7 +934,7 @@ export function ChatHistoryScreen(): React.JSX.Element {
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background }]}>
+    <View testID="chat-history" style={[styles.root, { backgroundColor: colors.background }]}>
       <SegmentedTabs tabs={tabs} active={activeTab} onSwitch={setActiveTab} />
 
       {activeTab === "history" && agents.length > 1 && (

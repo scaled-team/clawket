@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -21,13 +22,15 @@ export function FileListScreen(): React.JSX.Element {
   });
 
   return (
-    <FileListView
-      gateway={gateway}
-      topInset={0}
-      onBack={() => navigation.goBack()}
-      onOpenFile={(name) => navigation.navigate('FileEditor', { fileName: name })}
-      agentId={currentAgentId}
-      hideHeader
-    />
+    <View testID="file-list" style={{ flex: 1 }}>
+      <FileListView
+        gateway={gateway}
+        topInset={0}
+        onBack={() => navigation.goBack()}
+        onOpenFile={(name) => navigation.navigate('FileEditor', { fileName: name })}
+        agentId={currentAgentId}
+        hideHeader
+      />
+    </View>
   );
 }

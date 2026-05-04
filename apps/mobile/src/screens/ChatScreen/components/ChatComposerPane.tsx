@@ -104,6 +104,8 @@ export function ChatComposerPane({
         ) : null}
 
         <ChatComposer
+          inputTestID="chat-composer-input"
+          sendButtonTestID="chat-send-button"
           value={input}
           placeholder={placeholder}
           animatedPlaceholder={animatedPlaceholder}

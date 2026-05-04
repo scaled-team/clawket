@@ -219,7 +219,7 @@ export function AgentUserInfoScreen(): React.JSX.Element {
 
   if (loading) {
     return (
-      <View style={styles.root}>
+      <View testID="agent-user-info" style={styles.root}>
         <View style={styles.centerState}>
           <Text style={styles.stateText}>{t('Loading user info...')}</Text>
         </View>
@@ -229,7 +229,7 @@ export function AgentUserInfoScreen(): React.JSX.Element {
 
   if (error) {
     return (
-      <View style={styles.root}>
+      <View testID="agent-user-info" style={styles.root}>
         <View style={styles.centerState}>
           <Text style={styles.errorTitle}>{t('Failed to load user info')}</Text>
           <Text style={styles.stateText}>{error}</Text>
@@ -243,6 +243,7 @@ export function AgentUserInfoScreen(): React.JSX.Element {
 
   return (
     <KeyboardAvoidingView
+      testID="agent-user-info"
       behavior={Platform.select({ ios: 'padding', android: undefined })}
       keyboardVerticalOffset={insets.bottom}
       style={styles.root}

@@ -43,7 +43,7 @@ export function DocsScreen(): React.JSX.Element {
   }, [canGoBack, navigation]);
 
   return (
-    <View style={styles.root}>
+    <View testID="docs" style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerRow}>
           <View style={styles.titleLayer} pointerEvents="none">

@@ -39,6 +39,7 @@ type ActionRowProps = {
   disabled?: boolean;
   styles: ReturnType<typeof createStyles>;
   chevronColor: string;
+  testID?: string;
 };
 
 function ActionRow({
@@ -49,9 +50,11 @@ function ActionRow({
   disabled = false,
   styles,
   chevronColor,
+  testID,
 }: ActionRowProps): React.JSX.Element {
   return (
     <Pressable
+      testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
@@ -269,9 +272,10 @@ export function OpenClawConfigScreen(): React.JSX.Element {
   const updateAgentPrompt = t('Please first upgrade the installed clawket client on this computer by running `npm install -g @p697/clawket@latest`, then run `clawket restart` after the installation completes.');
 
   return (
-    <ScrollView contentContainerStyle={createCardContentStyle()}>
+    <ScrollView testID="open-claw-config" contentContainerStyle={createCardContentStyle()}>
       <View style={styles.card}>
         <ActionRow
+          testID="open-claw-config-view-config"
           title={t('View Config')}
           subtitle={t('View the current complete OpenClaw config')}
           onPress={handleViewConfigPress}
@@ -305,6 +309,7 @@ export function OpenClawConfigScreen(): React.JSX.Element {
         <View style={styles.divider} />
 
         <ActionRow
+          testID="open-claw-config-restore-backup"
           title={t('Restore Backup')}
           subtitle={t('Restore the OpenClaw config from a backup')}
           onPress={handleRestoreConfigPress}
@@ -355,6 +360,7 @@ export function OpenClawConfigScreen(): React.JSX.Element {
 
       <View style={styles.secondaryCard}>
         <ActionRow
+          testID="open-claw-config-permission-repair"
           title={t('One-click repair agent permissions')}
           subtitle={t('Check key OpenClaw permissions and repair them in one tap')}
           onPress={handlePermissionRepairPress}
@@ -370,6 +376,7 @@ export function OpenClawConfigScreen(): React.JSX.Element {
         <View style={styles.divider} />
 
         <ActionRow
+          testID="open-claw-config-permissions"
           title={t('OpenClaw Permission Management')}
           subtitle={t('View and adjust common OpenClaw permissions')}
           onPress={handlePermissionsPress}
@@ -385,6 +392,7 @@ export function OpenClawConfigScreen(): React.JSX.Element {
         <View style={styles.divider} />
 
         <Pressable
+          testID="open-claw-config-diagnostics"
           onPress={() => { void handleDoctorPress(); }}
           style={({ pressed }) => [
             styles.row,

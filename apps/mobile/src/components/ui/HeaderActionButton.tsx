@@ -13,6 +13,7 @@ type Props = {
   size?: number;
   strokeWidth?: number;
   buttonSize?: number;
+  testID?: string;
 };
 
 function resolveIconColor(tone: Tone, colors: ReturnType<typeof useAppTheme>['theme']['colors']): string {
@@ -29,6 +30,7 @@ export function HeaderActionButton({
   size = 18,
   strokeWidth = 2,
   buttonSize = 44,
+  testID,
 }: Props): React.JSX.Element {
   const { theme } = useAppTheme();
   const color = useMemo(
@@ -42,6 +44,7 @@ export function HeaderActionButton({
       icon={<Icon size={size} color={color} strokeWidth={strokeWidth} />}
       onPress={onPress}
       disabled={disabled}
+      testID={testID}
     />
   );
 }

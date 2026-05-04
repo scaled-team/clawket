@@ -32,7 +32,9 @@ import {
   testDelegateHttp,
   pollDelegateMessages,
   sendDelegateReply,
+  postDelegateUserMessage,
   fetchDelegateHistory,
+  fetchDelegateUsage,
   type DelegateConnectionConfig,
 } from './delegate-http-adapter';
 import { fetchDelegateAgents } from './delegate-dashboard';
@@ -223,7 +225,8 @@ export class GatewayClient {
     return this.config?.backendKind === 'delegate';
   }
 
-  private getDelegateConfig(): DelegateConnectionConfig | null {
+  /** Exposed for consumers that call typed Delegate service modules directly. */
+  public getDelegateConfig(): DelegateConnectionConfig | null {
     const delegate = this.config?.delegate;
     if (!delegate?.apiUrl || !delegate?.apiToken) return null;
     return { apiUrl: delegate.apiUrl, apiToken: delegate.apiToken };
@@ -251,6 +254,7 @@ export class GatewayClient {
         'delegate:main',
         this.delegateLastPollTimestamp ?? new Date(Date.now() - 60_000).toISOString(),
         20,
+        { includeAgent: true },
       );
       if (result.messages.length > 0) {
         const lastMsg = result.messages[result.messages.length - 1];
@@ -998,8 +1002,10 @@ export class GatewayClient {
     if (!dc) throw new Error('Delegate not configured');
     const runId = idempotencyKey ?? generateId();
 
-    // Post the user's message as a reply to delegate:main
-    const result = await sendDelegateReply(dc, 'delegate:main', text);
+    // Post the user's message via /api/agent/channel/post so it's stored with
+    // role="user" — that's what the agent's poll loop looks for. Using /reply
+    // here stored it as role="agent" and the agent never saw it.
+    const result = await postDelegateUserMessage(dc, 'delegate:main', text);
 
     // Mark the timestamp so next poll picks up the agent's response
     this.delegateLastPollTimestamp = new Date().toISOString();
@@ -1027,7 +1033,7 @@ export class GatewayClient {
       await new Promise(resolve => setTimeout(resolve, delay));
 
       try {
-        const result = await pollDelegateMessages(dc, 'delegate:main', pollTimestamp, 5);
+        const result = await pollDelegateMessages(dc, 'delegate:main', pollTimestamp, 5, { includeAgent: true });
         const agentMessages = result.messages.filter(m => m.role === 'agent' || m.isAI);
         if (agentMessages.length > 0) {
           const latest = agentMessages[agentMessages.length - 1];
@@ -1094,12 +1100,27 @@ export class GatewayClient {
   }
 
   private static readonly EMPTY_DELEGATE_HISTORY: ChatHistoryResult = Object.freeze({ messages: [] });
+  private delegateHistoryLoaded = false;
+  private delegateHistoryResult: ChatHistoryResult = { messages: [] };
 
-  private async fetchDelegateChatHistory(_limit: number): Promise<ChatHistoryResult> {
-    // Return a stable empty object. Delegate doesn't have WebSocket sessions —
-    // history is fetched on-demand when the user scrolls. Returning a new object
-    // each time would cause React re-render loops in ChatMessagePane.
-    return GatewayClient.EMPTY_DELEGATE_HISTORY;
+  private async fetchDelegateChatHistory(limit: number): Promise<ChatHistoryResult> {
+    // Cache after first successful load to prevent render loops
+    if (this.delegateHistoryLoaded) return this.delegateHistoryResult;
+    const dc = this.getDelegateConfig();
+    if (!dc) return GatewayClient.EMPTY_DELEGATE_HISTORY;
+    try {
+      const history = await fetchDelegateHistory(dc, 'delegate:main', limit);
+      this.delegateHistoryResult = {
+        messages: history.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+      };
+      this.delegateHistoryLoaded = true;
+      return this.delegateHistoryResult;
+    } catch {
+      return GatewayClient.EMPTY_DELEGATE_HISTORY;
+    }
   }
 
   /** Abort the current running chat in a session. */
@@ -1109,6 +1130,9 @@ export class GatewayClient {
 
   /** Fetch agent identity (name, avatar, emoji) from gateway. */
   public async fetchIdentity(agentId = 'main'): Promise<{ name?: string; avatar?: string; emoji?: string }> {
+    if (this.isDelegateBackend()) {
+      return { name: 'Delegate Agent', emoji: '🎯' };
+    }
     const cached = this.readTimedCache(this.agentIdentityCache.get(agentId));
     if (cached) return cached;
 
@@ -1358,11 +1382,39 @@ export class GatewayClient {
     };
   }
 
+  // Short-lived cache + in-flight dedupe for delegate usage (Office polls every 2.5s, Usage screen may fetch in parallel).
+  private delegateUsageCache = new Map<string, { at: number; data: { usage: unknown; cost: unknown } }>();
+  private delegateUsageInflight = new Map<string, Promise<{ usage: unknown; cost: unknown }>>();
+  private static readonly DELEGATE_USAGE_TTL_MS = 2000;
+
+  private async loadDelegateUsage(startDate: string, endDate: string): Promise<{ usage: unknown; cost: unknown }> {
+    const dc = this.getDelegateConfig();
+    if (!dc) return { usage: {}, cost: {} };
+    const key = `${startDate}::${endDate}`;
+    const cached = this.delegateUsageCache.get(key);
+    if (cached && Date.now() - cached.at < GatewayClient.DELEGATE_USAGE_TTL_MS) return cached.data;
+    const existing = this.delegateUsageInflight.get(key);
+    if (existing) return existing;
+    const promise = fetchDelegateUsage(dc, startDate, endDate)
+      .then((data) => {
+        this.delegateUsageCache.set(key, { at: Date.now(), data });
+        return data;
+      })
+      .catch(() => ({ usage: {}, cost: {} }))
+      .finally(() => this.delegateUsageInflight.delete(key));
+    this.delegateUsageInflight.set(key, promise);
+    return promise;
+  }
+
   /** Fetch aggregated usage data for a date range. */
   public async fetchUsage(params: {
     startDate: string;
     endDate: string;
   }): Promise<UsageResult> {
+    if (this.isDelegateBackend()) {
+      const { usage } = await this.loadDelegateUsage(params.startDate, params.endDate);
+      return (usage ?? {}) as UsageResult;
+    }
     return this.getBackendOperations().fetchUsage(this.sendBackendRequest, params);
   }
 
@@ -1371,6 +1423,10 @@ export class GatewayClient {
     startDate: string;
     endDate: string;
   }): Promise<CostSummary> {
+    if (this.isDelegateBackend()) {
+      const { cost } = await this.loadDelegateUsage(params.startDate, params.endDate);
+      return (cost ?? {}) as CostSummary;
+    }
     return this.getBackendOperations().fetchCostSummary(this.sendBackendRequest, params);
   }
 
@@ -1522,6 +1578,16 @@ export class GatewayClient {
 
   public getBackendCapabilities() {
     return getGatewayBackendCapabilities(this.config);
+  }
+
+  /**
+   * Public accessor for the delegate HTTP config. Returns null when the
+   * active gateway is not a delegate backend or when credentials are
+   * missing. Consumers can pass this directly to `delegate-http-adapter`
+   * helpers (e.g. `fetchDelegateProgress`, `fetchDelegateWorktree`).
+   */
+  public getDelegateHttpConfig(): DelegateConnectionConfig | null {
+    return this.getDelegateConfig();
   }
 
   private getBackendOperations() {
@@ -1799,9 +1865,10 @@ export class GatewayClient {
     options?: { timeoutMs?: number; skipAutoReconnectOnTimeout?: boolean },
   ): Promise<unknown> {
     return new Promise<unknown>((resolve, reject) => {
-      // Delegate backend uses HTTP, not WebSocket — reject WS-only requests silently
+      // Delegate backend uses HTTP, not WebSocket — resolve with null so
+      // sub-screens render empty state instead of showing error banners.
       if (this.isDelegateBackend()) {
-        reject(new Error(`Delegate backend does not support WebSocket method: ${method}`));
+        resolve(null);
         return;
       }
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {

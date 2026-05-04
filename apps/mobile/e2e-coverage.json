@@ -1,0 +1,24 @@
+{
+  "skipList": [
+    "DiscoverDetailScreen.tsx",
+    "DiscoverHomeScreen.tsx",
+    "ClawHubBrowseScreen.tsx",
+    "SkillsShBrowseScreen.tsx",
+    "OfficeGuideOverlay.tsx",
+    "HermesAwareCronScreens.tsx",
+    "HermesCronOutputSheetContent.tsx",
+    "StatsPosterModal.tsx",
+    "AppUpdateAnnouncementModal.tsx",
+    "ChatSharePosterModal.tsx",
+    "ConfigTab.tsx",
+    "ConsoleTab.tsx",
+    "HermesConsoleMenuScreen.tsx",
+    "HermesCronDetailScreen.tsx",
+    "HermesCronEditorScreen.tsx",
+    "HermesCronListScreen.tsx",
+    "HermesCronWizardScreen.tsx",
+    "QRScannerScreen.tsx",
+    "GatewayToolsScreen.tsx"
+  ],
+  "extraMappings": {}
+}

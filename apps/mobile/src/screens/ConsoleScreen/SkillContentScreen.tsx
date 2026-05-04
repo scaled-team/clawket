@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next';
 import { LoadingState, ScreenHeader } from '../../components/ui';
 import { useAppContext } from '../../contexts/AppContext';
 import { useProPaywall } from '../../contexts/ProPaywallContext';
+import { resolveGatewayBackendKind } from '../../services/gateway-backends';
+import { getSkill as getDelegateSkill } from '../../services/delegate-skills';
 import { useAppTheme } from '../../theme';
 import { FontSize, FontWeight, Radius, Space } from '../../theme/tokens';
 import type { SkillContentDetail } from '../../types';
@@ -49,7 +51,7 @@ function flattenLinkedFiles(
 }
 
 export function SkillContentScreen(): React.JSX.Element {
-  const { gateway, currentAgentId } = useAppContext();
+  const { gateway, currentAgentId, config } = useAppContext();
   const { requirePro } = useProPaywall();
   const { t } = useTranslation('console');
   const navigation = useNavigation<SkillContentNavigation>();
@@ -58,6 +60,13 @@ export function SkillContentScreen(): React.JSX.Element {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme.colors), [theme]);
   const { skillKey } = route.params;
+  const backendKind = resolveGatewayBackendKind(config);
+
+  // Delegate backend: Phase 6 — read-only markdown viewer. Dispatch early so
+  // the OpenClaw/Hermes editing flow below is unchanged.
+  if (backendKind === 'delegate') {
+    return <DelegateSkillContent skillKey={skillKey} />;
+  }
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -343,6 +352,89 @@ export function SkillContentScreen(): React.JSX.Element {
         <View style={styles.readOnlyFrame}>
           <Text style={styles.readOnlyText} selectable>
             {contentDetail?.content || t('No skill instructions found.')}
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function DelegateSkillContent({ skillKey }: { skillKey: string }): React.JSX.Element {
+  const { gateway } = useAppContext();
+  const { t } = useTranslation('console');
+  const navigation = useNavigation<SkillContentNavigation>();
+  const { theme } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(theme.colors), [theme]);
+
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) {
+      setError(t('Delegate backend is not configured.'));
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await getDelegateSkill(dc, skillKey);
+        if (cancelled) return;
+        setContent(detail.content ?? '');
+        setError(null);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : t('Failed to load instructions');
+        setError(message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gateway, skillKey, t]);
+
+  const header = (
+    <ScreenHeader
+      title={t('Skill Instructions')}
+      topInset={insets.top}
+      onBack={() => navigation.goBack()}
+      dismissStyle="close"
+    />
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.root} testID="skill-content">
+        {header}
+        <LoadingState message={t('Loading instructions...')} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.root} testID="skill-content">
+        {header}
+        <View style={styles.centerState}>
+          <Text style={styles.errorTitle}>{t('Failed to load instructions')}</Text>
+          <Text style={styles.stateText}>{error}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root} testID="skill-content">
+      {header}
+      <ScrollView style={styles.pageScroll} contentContainerStyle={styles.pageContent}>
+        <View style={styles.readOnlyFrame}>
+          <Text style={styles.readOnlyText} selectable testID="skill-content-body">
+            {content || t('No skill instructions found.')}
           </Text>
         </View>
       </ScrollView>

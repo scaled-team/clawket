@@ -21,6 +21,7 @@ import { useAppContext } from '../../contexts/AppContext';
 import { useProPaywall } from '../../contexts/ProPaywallContext';
 import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader';
 import { resolveGatewayBackendKind } from '../../services/gateway-backends';
+import { getSkill as getDelegateSkill, type SkillDetail as DelegateSkillDetail } from '../../services/delegate-skills';
 import { useAppTheme } from '../../theme';
 import { FontSize, FontWeight, Radius, Space } from '../../theme/tokens';
 import type { RequirementStatus, SkillStatusEntry, SkillStatusReport } from '../../types';
@@ -128,7 +129,14 @@ export function SkillDetailScreen(): React.JSX.Element {
   const navigation = useNavigation<SkillDetailNavigation>();
   const route = useRoute<SkillDetailRoute>();
   const styles = useMemo(() => createStyles(theme.colors), [theme]);
-  const supportsHermesSkillContent = resolveGatewayBackendKind(config) === 'hermes';
+  const backendKind = resolveGatewayBackendKind(config);
+  const supportsHermesSkillContent = backendKind === 'hermes';
+
+  // Delegate backend: Phase 6 — render a minimal detail view fetched from
+  // `/api/skills/[id]`. Dispatch early so each implementation owns its hooks.
+  if (backendKind === 'delegate') {
+    return <DelegateSkillDetailView skillKey={route.params.skillKey} />;
+  }
 
   const { skillKey } = route.params;
 
@@ -218,6 +226,7 @@ export function SkillDetailScreen(): React.JSX.Element {
     if (!skill || !fixableUnavailable) return;
     const prompt = buildSkillFixPrompt(skill);
     navigation.popToTop();
+    // poll-interval-ok: microtask trampoline (wait for popToTop before Chat input focus)
     setTimeout(() => requestChatWithInput(prompt), 50);
   }, [fixableUnavailable, navigation, requestChatWithInput, skill]);
 
@@ -532,6 +541,118 @@ export function SkillDetailScreen(): React.JSX.Element {
           </TouchableOpacity>
         ) : null}
 
+      </ScrollView>
+    </View>
+  );
+}
+
+function DelegateSkillDetailView({ skillKey }: { skillKey: string }): React.JSX.Element {
+  const { gateway } = useAppContext();
+  const { theme } = useAppTheme();
+  const { t } = useTranslation('console');
+  const navigation = useNavigation<SkillDetailNavigation>();
+  const styles = useMemo(() => createStyles(theme.colors), [theme]);
+
+  const [detail, setDetail] = useState<DelegateSkillDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadDetail = useCallback(async () => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) {
+      setError(t('Delegate backend is not configured.'));
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const next = await getDelegateSkill(dc, skillKey);
+      setDetail(next);
+      setError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load skill';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [gateway, skillKey, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadDetail().catch(() => {});
+    }, [loadDetail]),
+  );
+
+  useNativeStackModalHeader({
+    navigation,
+    title: detail?.name || t('Skill'),
+    onClose: () => navigation.goBack(),
+  });
+
+  if (loading) {
+    return (
+      <View style={styles.root} testID="skill-detail">
+        <LoadingState message={t('Loading skill...')} />
+      </View>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <View style={styles.root} testID="skill-detail">
+        <View style={styles.centerState}>
+          <Text style={styles.errorTitle}>{t('Failed to load skills')}</Text>
+          <Text style={styles.stateText}>{error ?? t('Skill not found')}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root} testID="skill-detail">
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>{t('Info')}</Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>{t('Name')}</Text>
+            <Text style={styles.infoValue} testID="skill-detail-name">{detail.name}</Text>
+          </View>
+          {detail.description ? (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{t('Description')}</Text>
+              <Text style={styles.infoValue}>{detail.description}</Text>
+            </View>
+          ) : null}
+          {detail.version ? (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>{t('Version')}</Text>
+              <Text style={styles.infoValue}>{detail.version}</Text>
+            </View>
+          ) : null}
+          {detail.tags && detail.tags.length > 0 ? (
+            <View style={styles.infoRowLast}>
+              <Text style={styles.infoLabel}>{t('Tags')}</Text>
+              <Text style={styles.infoValue}>{detail.tags.join(', ')}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <TouchableOpacity
+          style={styles.instructionsAction}
+          onPress={() => navigation.navigate('SkillContent', { skillKey })}
+          testID="skill-detail-content-button"
+          activeOpacity={0.9}
+        >
+          <View style={styles.instructionsActionContent}>
+            <View style={styles.instructionsActionIconWrap}>
+              <FileText size={18} color={theme.colors.primaryText} strokeWidth={2.1} />
+            </View>
+            <View style={styles.instructionsActionTextWrap}>
+              <Text style={styles.instructionsActionTitle}>{t('View Skill.md content')}</Text>
+            </View>
+            <ArrowRight size={18} color={theme.colors.primaryText} strokeWidth={2.2} />
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );

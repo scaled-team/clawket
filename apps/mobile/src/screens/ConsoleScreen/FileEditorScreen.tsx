@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { RouteProp, useNavigation, usePreventRemove, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -31,14 +31,16 @@ export function FileEditorScreen(): React.JSX.Element {
   });
 
   return (
-    <FileEditorView
-      gateway={gateway}
-      topInset={insets.top}
-      fileName={route.params.fileName}
-      onBack={() => navigation.goBack()}
-      onDirtyChange={setHasChanges}
-      agentId={currentAgentId}
-      dismissStyle="close"
-    />
+    <View testID="file-editor" style={{ flex: 1 }}>
+      <FileEditorView
+        gateway={gateway}
+        topInset={insets.top}
+        fileName={route.params.fileName}
+        onBack={() => navigation.goBack()}
+        onDirtyChange={setHasChanges}
+        agentId={currentAgentId}
+        dismissStyle="close"
+      />
+    </View>
   );
 }

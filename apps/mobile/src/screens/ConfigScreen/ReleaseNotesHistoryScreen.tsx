@@ -85,7 +85,7 @@ export function ReleaseNotesHistoryScreen(): React.JSX.Element {
 
   if (releases.length === 0) {
     return (
-      <ScrollView contentContainerStyle={[createCardContentStyle(), { flexGrow: 1 }]}>
+      <ScrollView testID="release-notes-history" contentContainerStyle={[createCardContentStyle(), { flexGrow: 1 }]}>
         <EmptyState
           icon="📝"
           title={t('No release notes yet')}
@@ -96,7 +96,7 @@ export function ReleaseNotesHistoryScreen(): React.JSX.Element {
   }
 
   return (
-    <ScrollView contentContainerStyle={createCardContentStyle()}>
+    <ScrollView testID="release-notes-history" contentContainerStyle={createCardContentStyle()}>
       <Text style={styles.pageSummary}>{t('Browse every product update in one place.')}</Text>
 
       <View style={styles.list}>

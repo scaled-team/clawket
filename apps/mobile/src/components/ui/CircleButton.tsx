@@ -15,6 +15,7 @@ type Props = {
   disabledColor?: string;
   style?: StyleProp<ViewStyle>;
   shadow?: boolean;
+  testID?: string;
 };
 
 const PRESS_SCALE = 0.78;
@@ -29,6 +30,7 @@ export function CircleButton({
   disabledColor,
   style,
   shadow,
+  testID,
 }: Props): React.JSX.Element {
   const radius = size / 2;
   const scale = useSharedValue(1);
@@ -52,6 +54,7 @@ export function CircleButton({
 
   return (
     <AnimatedPressable
+      testID={testID}
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}

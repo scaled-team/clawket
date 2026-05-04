@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -23,28 +24,30 @@ export function NodesScreen(): React.JSX.Element {
   });
 
   return (
-    <NodesView
-      gateway={gateway}
-      topInset={0}
-      onBack={() => navigation.goBack()}
-      onOpenNode={(node) => {
-        navigation.navigate('NodeDetail', {
-          nodeId: node.nodeId,
-          displayName: node.displayName,
-        });
-      }}
-      onOpenNodeDocs={nodeDocsUrl ? () => {
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 1,
-            routes: [
-              { name: 'ConsoleMenu' },
-              { name: 'Docs', params: { url: nodeDocsUrl } },
-            ],
-          }),
-        );
-      } : undefined}
-      hideHeader
-    />
+    <View testID="nodes" style={{ flex: 1 }}>
+      <NodesView
+        gateway={gateway}
+        topInset={0}
+        onBack={() => navigation.goBack()}
+        onOpenNode={(node) => {
+          navigation.navigate('NodeDetail', {
+            nodeId: node.nodeId,
+            displayName: node.displayName,
+          });
+        }}
+        onOpenNodeDocs={nodeDocsUrl ? () => {
+          navigation.dispatch(
+            CommonActions.reset({
+              index: 1,
+              routes: [
+                { name: 'ConsoleMenu' },
+                { name: 'Docs', params: { url: nodeDocsUrl } },
+              ],
+            }),
+          );
+        } : undefined}
+        hideHeader
+      />
+    </View>
   );
 }

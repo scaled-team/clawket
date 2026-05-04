@@ -373,14 +373,14 @@ export function OpenClawPermissionRepairScreen(): React.JSX.Element {
 
   if (!hasActiveGateway) {
     return (
-      <View style={styles.emptyWrap}>
+      <View testID="open-claw-permission-repair" style={styles.emptyWrap}>
         <EmptyState icon="!" title={t('No Active Gateway')} subtitle={t('Please add and activate a gateway connection first.')} />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView testID="open-claw-permission-repair" contentContainerStyle={styles.content}>
       {!isRelayRoute ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('Detailed checks need Clawket Bridge')}</Text>

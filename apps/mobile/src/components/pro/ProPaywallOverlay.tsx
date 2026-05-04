@@ -102,6 +102,7 @@ export function ProPaywallOverlay({ visible, onClose }: Props): React.JSX.Elemen
 
   const dismissThenRun = async <T,>(task: () => Promise<T>): Promise<T> => {
     hidePaywall();
+    // poll-interval-ok: next-tick trampoline (let React flush hidePaywall before running task)
     await new Promise((resolve) => setTimeout(resolve, 0));
     return task();
   };

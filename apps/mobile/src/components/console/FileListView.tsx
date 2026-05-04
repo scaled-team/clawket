@@ -305,6 +305,7 @@ export function FileListView({
     const disabled = item.missing;
     return (
       <Card
+        testID={`file-list-row-${item.name}`}
         style={[styles.card, disabled && styles.cardDisabled]}
         onPress={() => onOpenFile(item.name)}
         disabled={disabled}

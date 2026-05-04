@@ -115,10 +115,17 @@ export function ChatMessagePane({
             const animateEntrance = target === 'Cell' && newMessageIds.has(item.id);
             const bubble = renderMessageBubble(item);
             if (!bubble) return null;
+            // Systematic testID anchor so Detox specs can target any rendered
+            // message by id (e.g. `by.id("chat-message-" + messageId)`).
+            const wrapped = (
+              <View testID={`chat-message-${item.id}`}>
+                {bubble}
+              </View>
+            );
             if (animateEntrance) {
-              return <AnimatedEntrance key={item.id}>{bubble}</AnimatedEntrance>;
+              return <AnimatedEntrance key={item.id}>{wrapped}</AnimatedEntrance>;
             }
-            return bubble;
+            return wrapped;
           }}
         />
 

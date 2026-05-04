@@ -26,6 +26,7 @@ import { useAppContext } from '../../contexts/AppContext';
 import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader';
 import { analyticsEvents } from '../../services/analytics/events';
 import { resolveGatewayBackendKind } from '../../services/gateway-backends';
+import { listSkills as listDelegateSkills, type SkillRow as DelegateSkillRow } from '../../services/delegate-skills';
 import { StorageService, getDefaultSkillListSortMode } from '../../services/storage';
 import { useAppTheme } from '../../theme';
 import { FontSize, FontWeight, Radius, Space } from '../../theme/tokens';
@@ -103,6 +104,13 @@ export function SkillListScreen(): React.JSX.Element {
   const navigation = useNavigation<SkillListNavigation>();
   const styles = useMemo(() => createStyles(theme.colors), [theme]);
   const backendKind = resolveGatewayBackendKind(config);
+
+  // Delegate backend: Phase 6 — render a minimal list from `/api/skills`.
+  // The OpenClaw/Hermes flow below is unchanged. Each sub-component owns its
+  // own hook list; dispatching at the top avoids conditional-hook issues.
+  if (backendKind === 'delegate') {
+    return <DelegateSkillList />;
+  }
 
   const handleOpenDiscover = useCallback(() => {
     analyticsEvents.clawHubCreateTapped({
@@ -411,6 +419,109 @@ export function SkillListScreen(): React.JSX.Element {
           />
         </>
       )}
+    </View>
+  );
+}
+
+function DelegateSkillList(): React.JSX.Element {
+  const { gateway } = useAppContext();
+  const { theme } = useAppTheme();
+  const { t } = useTranslation('console');
+  const navigation = useNavigation<SkillListNavigation>();
+  const styles = useMemo(() => createStyles(theme.colors), [theme]);
+
+  const [skills, setSkills] = useState<DelegateSkillRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSkills = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
+    const dc = gateway.getDelegateConfig();
+    if (!dc) {
+      setError(t('Delegate backend is not configured.'));
+      setLoading(false);
+      return;
+    }
+    if (mode === 'initial') setLoading(true);
+    if (mode === 'refresh') setRefreshing(true);
+    try {
+      const { skills: rows } = await listDelegateSkills(dc);
+      setSkills(rows);
+      setError(null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to load skills';
+      setError(message);
+    } finally {
+      if (mode === 'initial') setLoading(false);
+      if (mode === 'refresh') setRefreshing(false);
+    }
+  }, [gateway, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSkills('initial').catch(() => {});
+    }, [loadSkills]),
+  );
+
+  useNativeStackModalHeader({
+    navigation,
+    title: t('Skills'),
+    onClose: () => navigation.goBack(),
+  });
+
+  if (loading) {
+    return (
+      <View style={styles.root} testID="skill-list">
+        <LoadingState message={t('Loading skills...')} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <SectionList
+        testID="skill-list"
+        sections={[{ key: 'delegate', title: 'Delegate', order: 0, data: skills }] as unknown as Array<SectionListData<SkillStatusEntry, SkillSection>>}
+        keyExtractor={(item) => (item as unknown as DelegateSkillRow).id}
+        contentContainerStyle={styles.content}
+        stickySectionHeadersEnabled={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadSkills('refresh')}
+            tintColor={theme.colors.primary}
+          />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="⚡"
+            title={error ?? t('No skills found')}
+          />
+        }
+        renderItem={({ item }) => {
+          const row = item as unknown as DelegateSkillRow;
+          return (
+            <Card
+              style={styles.card}
+              testID={`skill-list-row-${row.id}`}
+              onPress={() => navigation.navigate('SkillDetail', { skillKey: row.id })}
+            >
+              <View style={styles.cardHead}>
+                <View style={styles.cardMain}>
+                  <Text style={styles.cardEmoji}>⚡</Text>
+                  <View style={styles.cardTextWrap}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{row.name}</Text>
+                    {row.description ? (
+                      <Text style={styles.cardDescription} numberOfLines={1}>{row.description}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            </Card>
+          );
+        }}
+        renderSectionHeader={() => null}
+      />
     </View>
   );
 }

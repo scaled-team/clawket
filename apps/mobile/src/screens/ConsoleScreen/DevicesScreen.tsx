@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTranslation } from 'react-i18next';
@@ -21,11 +22,13 @@ export function DevicesScreen(): React.JSX.Element {
   });
 
   return (
-    <DevicesView
-      gateway={gateway}
-      topInset={0}
-      onBack={() => navigation.goBack()}
-      hideHeader
-    />
+    <View testID="devices" style={{ flex: 1 }}>
+      <DevicesView
+        gateway={gateway}
+        topInset={0}
+        onBack={() => navigation.goBack()}
+        hideHeader
+      />
+    </View>
   );
 }

@@ -69,6 +69,7 @@ export function ClawHubBrowseScreen(): React.JSX.Element {
   });
 
   useEffect(() => {
+    // poll-interval-ok: input debounce (search query)
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 280);
     return () => clearTimeout(timeout);
   }, [query]);

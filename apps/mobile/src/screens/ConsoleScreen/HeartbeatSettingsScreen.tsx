@@ -271,7 +271,7 @@ export function HeartbeatSettingsScreen(): React.JSX.Element {
   }, [intervalValue, intervalUnit, controller.heartbeatActiveStart, controller.heartbeatActiveEnd, sessionMode, controller.heartbeatModel, t]);
 
   return (
-    <View style={styles.root}>
+    <View testID="heartbeat-settings" style={styles.root}>
       <ScrollView
         contentContainerStyle={[
           styles.container,

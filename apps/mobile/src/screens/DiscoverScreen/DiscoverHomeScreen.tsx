@@ -55,6 +55,7 @@ export function DiscoverHomeScreen(): React.JSX.Element {
   const styles = useMemo(() => createStyles(theme.colors), [theme]);
 
   useEffect(() => {
+    // poll-interval-ok: input debounce (search query)
     const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 280);
     return () => clearTimeout(timeout);
   }, [query]);

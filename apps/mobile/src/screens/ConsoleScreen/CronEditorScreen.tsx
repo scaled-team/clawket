@@ -28,6 +28,7 @@ import type { CronJob, CronJobCreate, CronJobPatch, CronSchedule } from '../../t
 import { describeCronExpression } from '../../utils/cron';
 import type { ConsoleStackParamList } from './ConsoleTab';
 import { findCronJobById } from './cronData';
+import { useBackendAwareCron } from './backendAwareCronDispatch';
 
 type CronEditorNavigation = NativeStackNavigationProp<ConsoleStackParamList, 'CronEditor'>;
 type CronEditorRoute = RouteProp<ConsoleStackParamList, 'CronEditor'>;
@@ -137,11 +138,12 @@ function CronFieldsInput({
   };
 
   return (
-    <View style={s.cronFieldsRow}>
+    <View style={s.cronFieldsRow} testID="cron-editor-schedule-input">
       {CRON_FIELD_LABELS.map((label, i) => (
         <View key={label} style={s.cronFieldCol}>
           <Text style={s.cronFieldLabel}>{label}</Text>
           <TextInput
+            testID={`cron-editor-schedule-field-${label}`}
             style={s.cronFieldInput}
             value={fields[i]}
             onChangeText={(t) => handleChange(i, t)}
@@ -368,6 +370,7 @@ function deliveryFromForm(form: FormState): CronJobCreate['delivery'] {
 
 export function CronEditorScreen(): React.JSX.Element {
   const { gateway, currentAgentId } = useAppContext();
+  const cron = useBackendAwareCron(gateway);
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
   const navigation = useNavigation<CronEditorNavigation>();
@@ -550,7 +553,7 @@ export function CronEditorScreen(): React.JSX.Element {
           payload,
           delivery,
         };
-        await gateway.updateCronJob(jobId, patch);
+        await cron.updateJob(jobId, patch);
         analyticsEvents.cronSaveSucceeded({
           is_editing: true,
           payload_kind: form.payloadKind,
@@ -576,7 +579,7 @@ export function CronEditorScreen(): React.JSX.Element {
           payload,
           delivery,
         };
-        const created = await gateway.addCronJob(createPayload);
+        const created = await cron.createJob(createPayload);
         analyticsEvents.cronSaveSucceeded({
           is_editing: false,
           payload_kind: form.payloadKind,
@@ -603,7 +606,7 @@ export function CronEditorScreen(): React.JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [currentAgentId, editMode, form, gateway, jobId, navigation]);
+  }, [cron, currentAgentId, editMode, form, jobId, navigation, t]);
 
   useEffect(() => {
     handleSaveRef.current = () => {
@@ -634,6 +637,7 @@ export function CronEditorScreen(): React.JSX.Element {
       headerRight: () => (
         <View style={styles.headerRightSlot}>
           <HeaderTextAction
+            testID="cron-editor-save"
             label={saving ? t('common:Saving...') : t('common:Save')}
             onPress={() => handleSaveRef.current()}
             disabled={saving}
@@ -647,7 +651,7 @@ export function CronEditorScreen(): React.JSX.Element {
 
   if (loading) {
     return (
-      <View style={styles.root}>
+      <View testID="cron-editor" style={styles.root}>
         <LoadingState message={t('Loading cron job...')} />
       </View>
     );
@@ -655,7 +659,7 @@ export function CronEditorScreen(): React.JSX.Element {
 
   if (error) {
     return (
-      <View style={styles.root}>
+      <View testID="cron-editor" style={styles.root}>
         <View style={styles.centerState}>
           <Text style={styles.errorTitle}>{t('Failed to load cron job')}</Text>
           <Text style={styles.stateText}>{error}</Text>
@@ -668,13 +672,14 @@ export function CronEditorScreen(): React.JSX.Element {
   }
 
   return (
-    <View style={styles.root}>
+    <View testID="cron-editor" style={styles.root}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('General')}</Text>
 
           <Text style={styles.fieldLabel}>{t('Name *')}</Text>
           <TextInput
+            testID="cron-editor-name-input"
             style={styles.input}
             value={form.name}
             onChangeText={(value) => patchForm({ name: value })}

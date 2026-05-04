@@ -70,11 +70,12 @@ export function ClawHubScreen(): React.JSX.Element {
       source: 'clawhub_screen',
     });
     navigation.popToTop();
+    // poll-interval-ok: microtask trampoline (wait for popToTop before requesting chat input focus)
     setTimeout(() => requestChatWithInput(`Install ClawHub skill: ${skillSlug}`), 50);
   }, [skillSlug, navigation, requestChatWithInput]);
 
   return (
-    <View style={styles.root}>
+    <View testID="claw-hub" style={styles.root}>
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerRow}>
           <View style={styles.titleLayer} pointerEvents="none">
