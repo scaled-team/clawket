@@ -49,9 +49,40 @@ export function isConsoleScreenSupported(
       return capabilities.consoleAgentList;
     case 'AgentDetail':
     case 'AgentUserInfo':
+    case 'CreateAgent':
       return capabilities.consoleAgentDetail;
+    case 'TaskList':
+    case 'TaskDetail':
+      return capabilities.consoleTasks;
+    case 'CreateTask':
+      return capabilities.consoleCreateTask;
+    case 'BoardMeetings':
+    case 'BoardMeetingDetail':
+      return capabilities.consoleBoardMeetings;
+    case 'CreateBoardMeeting':
+      return capabilities.consoleCreateBoardMeeting;
+    case 'Notifications':
+      return capabilities.consoleNotifications;
     case 'HeartbeatSettings':
       return capabilities.consoleHeartbeat;
+    case 'AdminMenu':
+      return capabilities.consoleAdmin;
+    case 'AdminUsers':
+      return capabilities.consoleAdminUsers;
+    case 'AdminWorkspaces':
+      return capabilities.consoleAdminWorkspaces;
+    case 'AdminBilling':
+      return capabilities.consoleAdminBilling;
+    case 'AdminAudit':
+      return capabilities.consoleAdminAudit;
+    case 'AdminSessions':
+      return capabilities.consoleAdminSessions;
+    case 'DelegateServerList':
+      // Server-list belongs to the workspace admin surface, gated together
+      // with other admin-workspace reads. Delegate enables it; OpenClaw +
+      // Hermes leave `consoleAdminWorkspaces` false so the screen renders
+      // the standard "Not Available Yet" empty state.
+      return capabilities.consoleAdmin && capabilities.consoleAdminWorkspaces;
     default:
       return true;
   }

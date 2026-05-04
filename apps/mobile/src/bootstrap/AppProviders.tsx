@@ -11,6 +11,7 @@ import {
   DelegateLiveEventsProvider,
   type GetConnection as GetDelegateConnection,
 } from '../contexts/DelegateLiveEventsContext';
+import { WorkspaceProvider } from '../contexts/WorkspaceContext';
 
 type Props = {
   accentId: AccentColorId;
@@ -60,7 +61,12 @@ export function AppProviders({
                   enabled={!!getDelegateConnection}
                   getConnection={getDelegateConnection}
                 >
-                  {children}
+                  <WorkspaceProvider
+                    enabled={!!getDelegateConnection}
+                    getConnection={getDelegateConnection}
+                  >
+                    {children}
+                  </WorkspaceProvider>
                 </DelegateLiveEventsProvider>
               </AppThemeProvider>
             </BottomSheetModalProvider>

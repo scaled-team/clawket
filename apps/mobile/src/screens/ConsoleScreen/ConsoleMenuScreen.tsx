@@ -25,6 +25,7 @@ import { parseGatewayRuntimeSettings } from '../../utils/gateway-settings';
 import { getConsoleHeaderRefreshState } from './hooks/consoleHeaderRefreshPolicy';
 import { HermesConsoleMenuScreen } from './HermesConsoleMenuScreen';
 import { StatsPosterModal } from './StatsPosterModal';
+import { WorkspaceSwitcher } from '../../components/console/WorkspaceSwitcher';
 import type { ConsoleStackParamList } from './ConsoleTab';
 import { isCronJobForAgent } from './cronData';
 import { isConsoleScreenSupported } from './console-screen-support';
@@ -1090,6 +1091,8 @@ function OpenClawConsoleMenuScreen(): React.JSX.Element {
           />
         }
       >
+        {backendKind === 'delegate' ? <WorkspaceSwitcher /> : null}
+
         {/* Hero Row: Cost + Nodes */}
         <View style={styles.heroRow}>
           {heroItems.map((item) => (

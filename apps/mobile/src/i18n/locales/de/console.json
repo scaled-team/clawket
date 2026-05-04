@@ -932,5 +932,20 @@
   "local / origin / telegram": "local / origin / telegram",
   "blogwatcher, morning-brief": "blogwatcher, morning-brief",
   "fetch_status.py": "fetch_status.py",
-  "Total": "Gesamt"
+  "Total": "Gesamt",
+  "Workspace": "Arbeitsbereich",
+  "Select Workspace": "Arbeitsbereich auswählen",
+  "Owner": "Inhaber",
+  "Member": "Mitglied",
+  "{{count}} members": "{{count}} Mitglieder",
+  "{{count}} agents": "{{count}} Agenten",
+  "Delegate Servers": "Delegate-Server",
+  "Loading servers...": "Server werden geladen…",
+  "No DelegateAgent servers": "Keine DelegateAgent-Server",
+  "Servers connected to this workspace will appear here.": "Mit diesem Arbeitsbereich verbundene Server werden hier angezeigt.",
+  "Healthy": "Gesund",
+  "Unhealthy": "Nicht erreichbar",
+  "Unknown": "Unbekannt",
+  "Token": "Token",
+  "NanoClaw servers connected to this workspace": "Mit diesem Arbeitsbereich verbundene NanoClaw-Server"
 }

@@ -25,6 +25,8 @@ import { useNativeStackModalHeader } from '../../hooks/useNativeStackModalHeader
 import { analyticsEvents } from '../../services/analytics/events';
 import { resolveAgentDisplayName } from '../../services/agent-display-name';
 import { enrichAgentsWithIdentity } from '../../services/agent-identity';
+import { listDelegateAgents } from '../../services/delegate-agents';
+import { useDelegateWorkspace } from '../../contexts/WorkspaceContext';
 import { useAppTheme } from '../../theme';
 import { FontSize, FontWeight, Radius, Space } from '../../theme/tokens';
 import { getDisplayAgentEmoji } from '../../utils/agent-emoji';
@@ -40,6 +42,7 @@ export const pendingAgentDeletes = new Set<string>();
 
 export function AgentListScreen(): React.JSX.Element {
   const { gateway, gatewayEpoch, currentAgentId, setAgents } = useAppContext();
+  const { activeWorkspace } = useDelegateWorkspace();
   const { theme } = useAppTheme();
   const { t } = useTranslation('console');
   const { isPro, showPaywall } = useProPaywall();
@@ -47,8 +50,13 @@ export function AgentListScreen(): React.JSX.Element {
   const route = useRoute<AgentListRoute>();
   const styles = useMemo(() => createStyles(theme.colors), [theme]);
   const capabilities = gateway.getBackendCapabilities();
+  const isDelegateBackend = gateway.getBackendKind() === 'delegate';
   const canOpenAgentDetail = capabilities.consoleAgentDetail;
-  const canEditAgents = capabilities.consoleAgentDetail && capabilities.configWrite;
+  // Delegate uses a dedicated CreateAgentScreen (not the OpenClaw gateway modal)
+  // and exposes the plus button whenever the backend supports agent detail.
+  const canEditAgents = isDelegateBackend
+    ? capabilities.consoleAgentDetail
+    : capabilities.consoleAgentDetail && capabilities.configWrite;
 
   const [agents, setLocalAgents] = useState<AgentInfo[]>([]);
   const [mainKey, setMainKey] = useState('main');
@@ -65,8 +73,12 @@ export function AgentListScreen(): React.JSX.Element {
       return;
     }
     analyticsEvents.agentCreateStarted({ source });
+    if (isDelegateBackend) {
+      navigation.navigate('CreateAgent');
+      return;
+    }
     setCreateVisible(true);
-  }, [agents.length, isPro, showPaywall]);
+  }, [agents.length, isDelegateBackend, isPro, navigation, showPaywall]);
 
   const headerRight = useMemo(
     () => canEditAgents ? (
@@ -76,6 +88,7 @@ export function AgentListScreen(): React.JSX.Element {
           openCreateModal('agent_header');
         }}
         size={22}
+        testID="agent-list-create-button"
       />
     ) : null,
     [canEditAgents, openCreateModal],
@@ -123,6 +136,44 @@ export function AgentListScreen(): React.JSX.Element {
     if (mode === 'refresh') setRefreshing(true);
 
     try {
+      // Delegate branch: call the typed service directly so rows come from
+      // /api/agents and not the OpenClaw gateway RPC. The gateway wrapper also
+      // handles this path but returns AgentInfo lacking fields we need for
+      // Delegate-specific UI (heartbeatAt, role, color).
+      if (isDelegateBackend) {
+        const dc = gateway.getDelegateConfig();
+        if (!dc) {
+          setLocalAgents([]);
+          setHasLoadedOnce(true);
+          return;
+        }
+        const { agents: profiles } = await listDelegateAgents(
+          dc,
+          activeWorkspace?.id ? { workspaceId: activeWorkspace.id } : undefined,
+        );
+        const serverIds = new Set(profiles.map((a) => a.id));
+        for (const id of pendingDeleteIdsRef.current) {
+          if (!serverIds.has(id)) pendingDeleteIdsRef.current.delete(id);
+        }
+        const filtered = pendingDeleteIdsRef.current.size > 0
+          ? profiles.filter((a) => !pendingDeleteIdsRef.current.has(a.id))
+          : profiles;
+        const mapped: AgentInfo[] = filtered.map((a) => ({
+          id: a.id,
+          name: a.name,
+          identity: {
+            name: a.name,
+            emoji: a.isActive ? '🎯' : '⏸️',
+            avatar: a.avatar ?? undefined,
+          },
+        }));
+        setLocalAgents(mapped);
+        setMainKey('main');
+        setAgents(mapped);
+        setHasLoadedOnce(true);
+        return;
+      }
+
       const result = await gateway.listAgents();
       const serverIds = new Set(result.agents.map(a => a.id));
       for (const id of pendingDeleteIdsRef.current) {
@@ -142,7 +193,7 @@ export function AgentListScreen(): React.JSX.Element {
       if (mode === 'initial') setLoading(false);
       if (mode === 'refresh') setRefreshing(false);
     }
-  }, [gateway, gatewayEpoch, setAgents]);
+  }, [gateway, gatewayEpoch, isDelegateBackend, setAgents, activeWorkspace?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -159,6 +210,7 @@ export function AgentListScreen(): React.JSX.Element {
       <Card
         style={styles.card}
         onPress={canOpenAgentDetail ? () => navigation.navigate('AgentDetail', { agentId: item.id }) : undefined}
+        testID={`agent-list-row-${item.id}`}
       >
         <View style={styles.cardRow}>
           <Text style={styles.cardEmoji}>{emoji}</Text>
@@ -195,6 +247,7 @@ export function AgentListScreen(): React.JSX.Element {
           data={agents}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          testID="agent-list"
           contentContainerStyle={[styles.content, { flexGrow: 1 }]}
           refreshControl={
             <RefreshControl

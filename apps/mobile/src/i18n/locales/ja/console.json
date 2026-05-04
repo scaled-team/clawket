@@ -932,5 +932,20 @@
   "local / origin / telegram": "local / origin / telegram",
   "blogwatcher, morning-brief": "blogwatcher, morning-brief",
   "fetch_status.py": "fetch_status.py",
-  "Total": "合計"
+  "Total": "合計",
+  "Workspace": "ワークスペース",
+  "Select Workspace": "ワークスペースを選択",
+  "Owner": "オーナー",
+  "Member": "メンバー",
+  "{{count}} members": "{{count}} 名のメンバー",
+  "{{count}} agents": "{{count}} 個のエージェント",
+  "Delegate Servers": "Delegate サーバー",
+  "Loading servers...": "サーバーを読み込み中…",
+  "No DelegateAgent servers": "DelegateAgent サーバーがありません",
+  "Servers connected to this workspace will appear here.": "このワークスペースに接続されたサーバーがここに表示されます。",
+  "Healthy": "正常",
+  "Unhealthy": "異常",
+  "Unknown": "不明",
+  "Token": "トークン",
+  "NanoClaw servers connected to this workspace": "このワークスペースに接続された NanoClaw サーバー"
 }

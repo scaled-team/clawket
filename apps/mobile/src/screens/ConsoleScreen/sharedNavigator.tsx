@@ -36,6 +36,21 @@ import { SkillDetailScreen } from './SkillDetailScreen';
 import { SkillListScreen } from './SkillListScreen';
 import { AgentListScreen } from './AgentListScreen';
 import { AgentDetailScreen } from './AgentDetailScreen';
+import { DelegateServerListScreen } from './DelegateServerListScreen';
+import { CreateAgentScreen } from './CreateAgentScreen';
+import { TaskListScreen } from './TaskListScreen';
+import { TaskDetailScreen } from './TaskDetailScreen';
+import { CreateTaskScreen } from './CreateTaskScreen';
+import { BoardMeetingsScreen } from './BoardMeetingsScreen';
+import { BoardMeetingDetailScreen } from './BoardMeetingDetailScreen';
+import { CreateBoardMeetingScreen } from './CreateBoardMeetingScreen';
+import { NotificationsScreen } from './NotificationsScreen';
+import { AdminMenuScreen } from './AdminMenuScreen';
+import { AdminUsersScreen } from './AdminUsersScreen';
+import { AdminWorkspacesScreen } from './AdminWorkspacesScreen';
+import { AdminBillingScreen } from './AdminBillingScreen';
+import { AdminAuditScreen } from './AdminAuditScreen';
+import { AdminSessionsScreen } from './AdminSessionsScreen';
 import { ClawHubScreen } from './ClawHubScreen';
 import { DocsScreen } from './DocsScreen';
 import { ToolsScreen } from './ToolsScreen';
@@ -70,7 +85,22 @@ export type ConsoleStackParamList = {
   ToolList: undefined;
   AgentList: { openCreate?: boolean } | undefined;
   AgentDetail: { agentId: string };
+  DelegateServerList: undefined;
   AgentUserInfo: { agentId: string };
+  CreateAgent: undefined;
+  TaskList: undefined;
+  TaskDetail: { taskId: string };
+  CreateTask: { taskId?: string } | undefined;
+  BoardMeetings: undefined;
+  BoardMeetingDetail: { meetingId: string };
+  CreateBoardMeeting: undefined;
+  Notifications: undefined;
+  AdminMenu: undefined;
+  AdminUsers: undefined;
+  AdminWorkspaces: undefined;
+  AdminBilling: undefined;
+  AdminAudit: undefined;
+  AdminSessions: undefined;
   ClawHub: undefined;
   Docs: { url?: string } | undefined;
   HeartbeatSettings: undefined;
@@ -245,7 +275,22 @@ export function renderConsoleModalScreens({
       renderScreen('ToolList', ToolsScreen, nativeModalHeaderOptions),
       renderScreen('AgentList', AgentListScreen, nativeModalHeaderOptions),
       renderScreen('AgentDetail', AgentDetailScreen, nativeModalHeaderOptions),
+      renderScreen('DelegateServerList', DelegateServerListScreen, nativeModalHeaderOptions),
       renderScreen('AgentUserInfo', AgentUserInfoScreen, nativeEditorHeaderOptions),
+      renderScreen('CreateAgent', CreateAgentScreen, nativeModalHeaderOptions),
+      renderScreen('TaskList', TaskListScreen, nativeModalHeaderOptions),
+      renderScreen('TaskDetail', TaskDetailScreen, detailScreenOptions),
+      renderScreen('CreateTask', CreateTaskScreen, nativeModalHeaderOptions),
+      renderScreen('BoardMeetings', BoardMeetingsScreen, nativeModalHeaderOptions),
+      renderScreen('BoardMeetingDetail', BoardMeetingDetailScreen, detailScreenOptions),
+      renderScreen('CreateBoardMeeting', CreateBoardMeetingScreen, nativeModalHeaderOptions),
+      renderScreen('Notifications', NotificationsScreen, nativeModalHeaderOptions),
+      renderScreen('AdminMenu', AdminMenuScreen, nativeModalHeaderOptions),
+      renderScreen('AdminUsers', AdminUsersScreen, nativeModalHeaderOptions),
+      renderScreen('AdminWorkspaces', AdminWorkspacesScreen, nativeModalHeaderOptions),
+      renderScreen('AdminBilling', AdminBillingScreen, nativeModalHeaderOptions),
+      renderScreen('AdminAudit', AdminAuditScreen, nativeModalHeaderOptions),
+      renderScreen('AdminSessions', AdminSessionsScreen, nativeModalHeaderOptions),
       renderScreen('ClawHub', ClawHubScreen),
       renderScreen('Docs', DocsScreen),
       renderScreen('HeartbeatSettings', HeartbeatSettingsScreen, nativeEditorHeaderOptions),
@@ -316,7 +361,22 @@ export function ConsoleTabNavigator(): React.JSX.Element {
       ToolList: withConsoleCapabilityGuard('ToolList', ToolsScreen),
       AgentList: withConsoleCapabilityGuard('AgentList', AgentListScreen),
       AgentDetail: withConsoleCapabilityGuard('AgentDetail', AgentDetailScreen),
+      DelegateServerList: withConsoleCapabilityGuard('DelegateServerList', DelegateServerListScreen),
       AgentUserInfo: withConsoleCapabilityGuard('AgentUserInfo', AgentUserInfoScreen),
+      CreateAgent: withConsoleCapabilityGuard('CreateAgent', CreateAgentScreen),
+      TaskList: withConsoleCapabilityGuard('TaskList', TaskListScreen),
+      TaskDetail: withConsoleCapabilityGuard('TaskDetail', TaskDetailScreen),
+      CreateTask: withConsoleCapabilityGuard('CreateTask', CreateTaskScreen),
+      BoardMeetings: withConsoleCapabilityGuard('BoardMeetings', BoardMeetingsScreen),
+      BoardMeetingDetail: withConsoleCapabilityGuard('BoardMeetingDetail', BoardMeetingDetailScreen),
+      CreateBoardMeeting: withConsoleCapabilityGuard('CreateBoardMeeting', CreateBoardMeetingScreen),
+      Notifications: withConsoleCapabilityGuard('Notifications', NotificationsScreen),
+      AdminMenu: withConsoleCapabilityGuard('AdminMenu', AdminMenuScreen),
+      AdminUsers: withConsoleCapabilityGuard('AdminUsers', AdminUsersScreen),
+      AdminWorkspaces: withConsoleCapabilityGuard('AdminWorkspaces', AdminWorkspacesScreen),
+      AdminBilling: withConsoleCapabilityGuard('AdminBilling', AdminBillingScreen),
+      AdminAudit: withConsoleCapabilityGuard('AdminAudit', AdminAuditScreen),
+      AdminSessions: withConsoleCapabilityGuard('AdminSessions', AdminSessionsScreen),
       ClawHub: withConsoleCapabilityGuard('ClawHub', ClawHubScreen),
       Docs: withConsoleCapabilityGuard('Docs', DocsScreen),
       HeartbeatSettings: withConsoleCapabilityGuard('HeartbeatSettings', HeartbeatSettingsScreen),

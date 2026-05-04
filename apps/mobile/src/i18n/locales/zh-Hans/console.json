@@ -938,5 +938,20 @@
   "local / origin / telegram": "local / origin / telegram",
   "blogwatcher, morning-brief": "blogwatcher, morning-brief",
   "fetch_status.py": "fetch_status.py",
-  "Total": "总计"
+  "Total": "总计",
+  "Workspace": "工作区",
+  "Select Workspace": "选择工作区",
+  "Owner": "所有者",
+  "Member": "成员",
+  "{{count}} members": "{{count}} 名成员",
+  "{{count}} agents": "{{count}} 个代理",
+  "Delegate Servers": "Delegate 服务器",
+  "Loading servers...": "正在加载服务器…",
+  "No DelegateAgent servers": "暂无 DelegateAgent 服务器",
+  "Servers connected to this workspace will appear here.": "连接到该工作区的服务器将在此显示。",
+  "Healthy": "健康",
+  "Unhealthy": "异常",
+  "Unknown": "未知",
+  "Token": "令牌",
+  "NanoClaw servers connected to this workspace": "已连接到该工作区的 NanoClaw 服务器"
 }
